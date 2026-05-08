@@ -35,6 +35,7 @@ describe('onCallback Hook', () => {
   let mockConfig: any;
   let mockClient: any;
   let mockSession: SessionData;
+  let mockStateStore: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -53,8 +54,16 @@ describe('onCallback Hook', () => {
     });
 
     mockClient = createMockClient({
-      completeInteractiveLogin: vi.fn().mockResolvedValue({
-        appState: { returnTo: '/dashboard' },
+      // completeInteractiveLogin must trigger stateStore.set() for the proxy to capture session.
+      // In real server-js, this happens internally. In tests, we simulate it.
+      completeInteractiveLogin: vi.fn().mockImplementation(async (_url: any, ctx: any) => {
+        const stateStore = ctx.get('__auth0_state_store');
+        const stateData = {
+          ...mockSession,
+          internal: { sid: 'session_id_123', createdAt: Math.floor(Date.now() / 1000) },
+        };
+        await stateStore.set('appSession', stateData, true, ctx);
+        return { appState: { returnTo: '/dashboard' } };
       }),
       getSession: vi.fn().mockResolvedValue(mockSession),
       logout: vi.fn(),
@@ -68,7 +77,7 @@ describe('onCallback Hook', () => {
     });
 
     // Set up mock stateStore with contract-enforcing set
-    const mockStateStore = {
+    mockStateStore = {
       get: vi.fn().mockResolvedValue({
         ...mockSession,
         internal: {
@@ -137,17 +146,16 @@ describe('onCallback Hook', () => {
     // Verify hook was called
     expect(hookFn).toHaveBeenCalled();
 
-    // Verify enriched session was persisted via stateStore.set (with internal preserved)
-    const mockStateStore = mockContext.get('__auth0_state_store');
-    expect(mockStateStore.set).toHaveBeenCalledWith(
-      'appSession',
-      expect.objectContaining({
-        permissions: ['read:data', 'write:data'],
-        internal: expect.objectContaining({ createdAt: expect.any(Number) }),
-      }),
-      false,
-      mockContext
+    // Find enrichment call (removeIfExists=false, distinct from completeInteractiveLogin's call with true)
+
+    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+      (call: any[]) => call[2] === false
     );
+    expect(enrichmentCall).toBeDefined();
+    expect(enrichmentCall[1]).toMatchObject({
+      permissions: ['read:data', 'write:data'],
+      internal: expect.objectContaining({ createdAt: expect.any(Number) }),
+    });
   });
 
   it('should support Response override in onCallback on success', async () => {
@@ -309,26 +317,20 @@ describe('onCallback Hook', () => {
 
     await callbackMiddleware(mockContext, next);
 
-    // Verify enriched data was persisted via stateStore.set (with internal intact)
-    const mockStateStore = mockContext.get('__auth0_state_store');
-    expect(mockStateStore.set).toHaveBeenCalledWith(
-      'appSession',
-      expect.objectContaining({
-        roles: ['admin'],
-        internal: expect.objectContaining({ createdAt: expect.any(Number) }),
-      }),
-      false,
-      mockContext
+    // Find enrichment call (removeIfExists=false)
+
+    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+      (call: any[]) => call[2] === false
     );
+    expect(enrichmentCall).toBeDefined();
+    expect(enrichmentCall[1]).toMatchObject({
+      roles: ['admin'],
+      internal: expect.objectContaining({ createdAt: expect.any(Number) }),
+    });
   });
 
   // REQ-B1: Prevent hook from overwriting internal field
   it('should preserve internal field when hook returns enriched session without internal', async () => {
-    const rawSessionInternal = {
-      sid: 'original_session_id',
-      createdAt: 1234567890,
-    };
-
     const enrichedSessionFromHook = {
       ...mockSession,
       internal: undefined, // Hook tries to overwrite
@@ -338,12 +340,6 @@ describe('onCallback Hook', () => {
     const hookFn = vi.fn().mockResolvedValue(enrichedSessionFromHook);
     mockConfig.onCallback = hookFn;
 
-    const mockStateStore = mockContext.get('__auth0_state_store');
-    mockStateStore.get.mockResolvedValue({
-      ...mockSession,
-      internal: rawSessionInternal,
-    });
-
     const callbackMiddleware = callback();
     const next = vi.fn();
 
@@ -352,16 +348,17 @@ describe('onCallback Hook', () => {
     // Verify hook was called
     expect(hookFn).toHaveBeenCalled();
 
-    // Verify internal field was preserved from rawState, not from hook
-    expect(mockStateStore.set).toHaveBeenCalledWith(
-      'appSession',
-      expect.objectContaining({
-        permissions: ['read:data'],
-        internal: rawSessionInternal, // Original internal preserved
-      }),
-      false,
-      mockContext
+    // Verify internal field was preserved from captured state (set during completeInteractiveLogin)
+
+    // stateStore.set is called twice: once by completeInteractiveLogin (via proxy), once by enrichment
+    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+      (call: any[]) => call[2] === false // enrichment uses removeIfExists=false
     );
+    expect(enrichmentCall).toBeDefined();
+    expect(enrichmentCall[1]).toMatchObject({
+      permissions: ['read:data'],
+      internal: expect.objectContaining({ createdAt: expect.any(Number) }),
+    });
   });
 
   it('should NOT allow hook to overwrite internal field', async () => {
@@ -378,35 +375,22 @@ describe('onCallback Hook', () => {
     const hookFn = vi.fn().mockResolvedValue(enrichedSessionFromHook);
     mockConfig.onCallback = hookFn;
 
-    const originalInternal = {
-      sid: 'original_session_id',
-      createdAt: 1234567890,
-    };
-
-    const mockStateStore = mockContext.get('__auth0_state_store');
-    mockStateStore.get.mockResolvedValue({
-      ...mockSession,
-      internal: originalInternal,
-    });
-
     const callbackMiddleware = callback();
     const next = vi.fn();
 
     await callbackMiddleware(mockContext, next);
 
-    // Verify original internal is preserved, not hook's version
-    expect(mockStateStore.set).toHaveBeenCalledWith(
-      'appSession',
-      expect.objectContaining({
-        internal: originalInternal, // Not hookProvidedInternal
-      }),
-      false,
-      mockContext
-    );
+    // Find the enrichment call (removeIfExists=false)
 
-    // Explicitly verify hook's internal was rejected
-    const [, persistedData] = (mockStateStore.set as any).mock.calls[0];
+    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+      (call: any[]) => call[2] === false
+    );
+    expect(enrichmentCall).toBeDefined();
+
+    // Verify original internal is preserved, not hook's version
+    const persistedData = enrichmentCall[1];
     expect(persistedData.internal.sid).not.toBe('hacker_session_id');
+    expect(persistedData.internal.createdAt).not.toBe(9999999999);
   });
 
   // REQ-B2: Handle case where stateStore.get returns null after login
@@ -414,7 +398,7 @@ describe('onCallback Hook', () => {
     const hookFn = vi.fn().mockResolvedValue(undefined);
     mockConfig.onCallback = hookFn;
 
-    const mockStateStore = mockContext.get('__auth0_state_store');
+
     mockStateStore.get.mockResolvedValue(null); // Race condition: state already deleted
 
     const callbackMiddleware = callback();
@@ -431,7 +415,7 @@ describe('onCallback Hook', () => {
     const hookFn = vi.fn().mockResolvedValue(undefined);
     mockConfig.onCallback = hookFn;
 
-    const mockStateStore = mockContext.get('__auth0_state_store');
+
     mockStateStore.get.mockResolvedValue(mockSession); // Valid session returned
 
     const callbackMiddleware = callback();

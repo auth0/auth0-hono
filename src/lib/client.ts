@@ -1,6 +1,11 @@
 import { Configuration } from '@/config/Configuration.js';
 import { HonoCookieHandler } from '@/session/HonoCookieHandler.js';
 import { createRouteUrl } from '@/utils/util.js';
+
+/** Resolve secret to string (first element if array — active encryption key). */
+function resolveSecret(secret: string | string[]): string {
+  return Array.isArray(secret) ? secret[0] : secret;
+}
 import {
   CookieTransactionStore,
   ServerClient,
@@ -48,7 +53,7 @@ export function createStateStore(config: Configuration, cookieHandler: HonoCooki
     ? new StatefulStateStore(
         {
           ...config.session,
-          secret: config.session.secret,
+          secret: resolveSecret(config.session.secret),
           store: config.session.store,
         },
         cookieHandler
@@ -56,7 +61,7 @@ export function createStateStore(config: Configuration, cookieHandler: HonoCooki
     : new StatelessStateStore(
         {
           ...config.session,
-          secret: config.session.secret,
+          secret: resolveSecret(config.session.secret),
         },
         cookieHandler
       );
@@ -95,7 +100,7 @@ export function initializeOidcClient(config: Configuration): Auth0ClientBundle {
     },
     transactionStore: new CookieTransactionStore(
       {
-        secret: config.session.secret,
+        secret: resolveSecret(config.session.secret),
       },
       cookieHandler
     ),

@@ -32,6 +32,13 @@ describe('callback middleware', () => {
 
     (resumeSilentLogin as Mock).mockReturnValue(resumeSilentLoginMiddleware);
 
+    // Create a mock state store
+    const mockStateStore = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
     // Create a mock client
     mockClient = {
       completeInteractiveLogin: vi.fn(),
@@ -46,6 +53,10 @@ describe('callback middleware', () => {
       redirect: vi.fn().mockImplementation((url) => {
         return { status: 302, headers: { location: url } };
       }),
+      get: vi.fn().mockImplementation((key: string) => {
+        if (key === '__auth0_state_store') return mockStateStore;
+        return undefined;
+      }),
     } as unknown as Context;
 
     // Create mock configuration
@@ -53,6 +64,9 @@ describe('callback middleware', () => {
       baseURL: 'https://app.example.com',
       routes: {
         callback: '/callback',
+      },
+      session: {
+        cookie: { name: 'appSession' },
       },
     };
 

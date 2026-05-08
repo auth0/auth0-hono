@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { SessionStore } from '../types/session.js';
 import { Configuration } from './Configuration.js';
 
 const isHttps = /^https:/i;
@@ -22,7 +21,6 @@ const createAuthParamsSchema = () => {
 // Create the configuration schema
 export const ConfigurationSchema = z
   .object({
-    sessionStore: z.instanceof(SessionStore).optional(),
     session: z.object({
       store: z.any().optional(),
       secret: z.union([z.string().min(32), z.array(z.string().min(32)).min(1)]),

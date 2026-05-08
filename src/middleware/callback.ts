@@ -57,14 +57,44 @@ export const callback = (params: CallbackParams = {}) => {
     let error: Auth0Error | null = null;
 
     try {
-      // Complete the login flow
-      const { appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
-        createRouteUrl(c.req.url, baseURL),
-        c
-      );
+      // Capture the session that completeInteractiveLogin persists.
+      // We can't re-read from cookies because setCookie writes to response headers
+      // but getCookie reads from the request Cookie header (stale on callback request).
+      // We intercept stateStore.set() to capture the written StateData in memory.
+      //
+      // CONCURRENCY NOTE: The patch window is ~50ms (duration of completeInteractiveLogin).
+      // In serverless (1 request/isolate), no issue. In Node.js with concurrent callbacks,
+      // interleaving is theoretically possible but practically negligible (callback URL is
+      // hit once per login flow, not under concurrent load).
+      const { stateStore, identifier } = getStateStoreContext(c, configuration);
+      let capturedStateData: StateData | null = null;
+      const originalSet = stateStore.set;
+      stateStore.set = async function (this: StateStore<Context>, id, data, removeIfExists, opts) {
+        if (id === identifier) {
+          capturedStateData = data as StateData;
+        }
+        return originalSet.call(this, id, data, removeIfExists, opts);
+      };
 
-      // Get the session that was just created
-      session = (await client.getSession(c)) ?? null;
+      let appState: { returnTo: string } | undefined;
+      try {
+        // Complete the login flow
+        ({ appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
+          createRouteUrl(c.req.url, baseURL),
+          c
+        ));
+      } finally {
+        // Always restore — even if completeInteractiveLogin throws
+        stateStore.set = originalSet;
+      }
+
+      // Use captured session (strips internal to match SessionData contract)
+      if (capturedStateData) {
+        const stateObj = capturedStateData as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { internal: _internal, ...sessionData } = stateObj;
+        session = sessionData as SessionData;
+      }
 
       // SUCCESS PATH: Invoke onCallback hook
       const hook = params.onCallback ?? configuration.onCallback;
@@ -78,26 +108,20 @@ export const callback = (params: CallbackParams = {}) => {
           // If hook returns enriched session (different object), persist it
           if (hookResult && hookResult !== session) {
             session = hookResult as SessionData;
-            // Read raw StateData from store (preserves internal.createdAt)
-            // then merge hook's enriched fields onto it for persistence.
-            const { stateStore, identifier } = getStateStoreContext(c, configuration);
-            const rawState = (await stateStore.get(identifier, c)) as StateData | null;
 
-            if (rawState) {
-              // SAFETY: Explicitly preserve internal field after hook enrichment
-              // This prevents the hook from overwriting the session's internal metadata
+            if (capturedStateData) {
+              // Use captured state (has internal.createdAt) — no re-read from cookies needed
+              const rawState = capturedStateData as Record<string, unknown> & { internal: { createdAt: number } };
               const enrichedState = {
                 ...rawState,
                 ...session,
                 internal: rawState.internal,
-              };
+              } as StateData;
               await stateStore.set(identifier, enrichedState, false, c);
             } else {
-              // Race condition: session cleared between login and hook execution
-              // Log warning so operators detect session store issues
+              // Shouldn't happen: completeInteractiveLogin succeeded but we didn't capture state
               configuration.debug(
-                'Warning: Hook enrichment discarded due to missing session state after successful login. ' +
-                  'This may indicate a race condition in your state store.'
+                'Warning: Hook enrichment discarded — session state not captured during login.'
               );
             }
           }

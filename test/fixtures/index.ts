@@ -146,12 +146,13 @@ export function createMockConfig(overrides?: Record<string, any>): any {
     },
     session: {
       cookie: {
+        name: 'appSession',
         secure: false,
         httpOnly: true,
         sameSite: 'Lax',
       },
     },
-    debug: false,
+    debug: vi.fn(),
     ...overrides,
   };
 }

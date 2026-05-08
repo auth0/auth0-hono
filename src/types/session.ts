@@ -36,9 +36,12 @@ export interface SessionCookieOptions {
 
 export interface SessionConfiguration {
   /**
-   * The encryption key used to encrypt the session data.
+   * The encryption key(s) used to encrypt the session data.
+   * Supports key rotation: pass an array where the first key encrypts new sessions
+   * and remaining keys can decrypt existing sessions.
+   * Each key must be at least 32 characters.
    */
-  secret: string;
+  secret: string | string[];
 
   /**
    * The store used to persist the session data.

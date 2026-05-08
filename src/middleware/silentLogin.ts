@@ -27,11 +27,13 @@ const getCookieOptions = (c: Context<OIDCEnv>): CookieOptions => {
 
 /**
  * Cancel silent login attempts by setting a cookie.
- * This prevents automatic silent login attempts on the next request.
+ * Calls next() — safe to use as composable middleware in route chains:
+ *   app.get('/logout', cancelSilentLogin(), handleLogout())
  */
 export const cancelSilentLogin = () =>
-  createMiddleware(async (c) => {
+  createMiddleware(async (c, next) => {
     setCookie(c, COOKIE_NAME, 'true', getCookieOptions(c));
+    return next();
   });
 
 /**
@@ -39,9 +41,14 @@ export const cancelSilentLogin = () =>
  */
 export const pauseSilentLogin = cancelSilentLogin;
 
+/**
+ * Resume silent login by deleting the skip cookie.
+ * Calls next() — safe to use as composable middleware in route chains.
+ */
 export const resumeSilentLogin = () =>
-  createMiddleware(async (c) => {
+  createMiddleware(async (c, next) => {
     deleteCookie(c, COOKIE_NAME, getCookieOptions(c));
+    return next();
   });
 
 export const attemptSilentLogin = () => {
@@ -64,8 +71,8 @@ export const attemptSilentLogin = () => {
       return next();
     }
 
-    // Set skip cookie first (prevent infinite retry loops)
-    await cancelSilentLogin()(c, next);
+    // Set skip cookie directly (not via middleware — we don't want next() called here)
+    setCookie(c, COOKIE_NAME, 'true', getCookieOptions(c));
 
     try {
       return await login({ silent: true })(c, next);

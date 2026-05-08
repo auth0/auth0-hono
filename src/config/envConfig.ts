@@ -6,7 +6,7 @@ export type MinimalConfigByEnv = {
   AUTH0_CLIENT_ID: string;
   AUTH0_CLIENT_SECRET?: string;
   AUTH0_AUDIENCE?: string;
-  BASE_URL: string;
+  APP_BASE_URL: string;
   AUTH0_SESSION_ENCRYPTION_KEY?: string;
 };
 
@@ -21,10 +21,10 @@ export const envHasConfig = (config: MinimalConfigByEnv | unknown): config is Mi
     config !== null &&
     'AUTH0_DOMAIN' in config &&
     'AUTH0_CLIENT_ID' in config &&
-    'BASE_URL' in config &&
+    'APP_BASE_URL' in config &&
     typeof config.AUTH0_DOMAIN === 'string' &&
     typeof config.AUTH0_CLIENT_ID === 'string' &&
-    typeof config.BASE_URL === 'string'
+    typeof config.APP_BASE_URL === 'string'
   );
 };
 
@@ -50,7 +50,7 @@ export const assignFromEnv = (
     return configWithoutEnv as InitConfiguration;
   }
 
-  const { AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, BASE_URL, AUTH0_AUDIENCE, AUTH0_SESSION_ENCRYPTION_KEY } =
+  const { AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, APP_BASE_URL, AUTH0_AUDIENCE, AUTH0_SESSION_ENCRYPTION_KEY } =
     runtimeEnv;
 
   const authorizationParams = { ...configWithoutEnv.authorizationParams };
@@ -61,7 +61,7 @@ export const assignFromEnv = (
     domain: configWithoutEnv.domain ?? AUTH0_DOMAIN,
     clientID: configWithoutEnv.clientID ?? AUTH0_CLIENT_ID,
     clientSecret: configWithoutEnv.clientSecret ?? AUTH0_CLIENT_SECRET,
-    baseURL: configWithoutEnv.baseURL ?? BASE_URL,
+    baseURL: configWithoutEnv.baseURL ?? APP_BASE_URL,
     authorizationParams: authorizationParams,
     session: {
       ...(configWithoutEnv.session || {}),

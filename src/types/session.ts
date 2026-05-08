@@ -17,7 +17,7 @@ export interface SessionCookieOptions {
   /**
    * The name of the session cookie.
    *
-   * Default: `__a0_session`.
+   * Default: `appSession`.
    */
   name?: string;
   /**

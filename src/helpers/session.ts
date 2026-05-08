@@ -9,7 +9,7 @@ import { Auth0Error } from '@/errors/Auth0Error.js';
 const StateDataSchema = z
   .object({
     user: z.record(z.any()),
-    idToken: z.string(),
+    idToken: z.string().optional(),
     tokenSets: z.array(z.any()),
     internal: z
       .object({

@@ -94,6 +94,8 @@ app.use(
 
 **Config precedence:** explicit config > environment variables > schema defaults
 
+> **Known limitation:** Configuration is captured from the first request (singleton pattern). Multi-tenant deployments where different requests have different environment bindings (e.g., Cloudflare Workers with per-route env) should use separate `auth0()` middleware instances with explicit config objects rather than relying on environment variables.
+
 ## Middleware Reference
 
 ### `auth0(config?)`

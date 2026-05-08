@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SessionStore } from '../types/session.js';
+import { Configuration } from './Configuration.js';
 
 const isHttps = /^https:/i;
 
@@ -61,7 +62,7 @@ export const ConfigurationSchema = z
       .array(z.string())
       .optional()
       .default(['aud', 'iss', 'iat', 'exp', 'nbf', 'nonce', 'azp', 'auth_time', 's_hash', 'at_hash', 'c_hash']),
-    idpLogout: z.boolean().optional().default(false),
+    idpLogout: z.boolean().optional().default(true),
     idTokenSigningAlg: z
       .string()
       .refine((val) => val.toLowerCase() !== 'none', {
@@ -113,6 +114,10 @@ export const ConfigurationSchema = z
       .custom<typeof globalThis.fetch>((v) => typeof v === 'function')
       .optional()
       .default(() => globalThis.fetch),
+
+    onCallback: z
+      .custom<Configuration['onCallback']>((v) => typeof v === 'function')
+      .optional(),
   })
   .transform((data) => {
     const isSecure = /^https:/i.test(data.baseURL);

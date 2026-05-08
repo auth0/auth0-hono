@@ -170,7 +170,7 @@ describe('Environment Configuration', () => {
     const validEnv = {
       AUTH0_DOMAIN: 'test.auth0.com',
       AUTH0_CLIENT_ID: 'test-client-id',
-      BASE_URL: 'https://example.com',
+      APP_BASE_URL: 'https://example.com',
       AUTH0_CLIENT_SECRET: 'test-secret',
       AUTH0_AUDIENCE: 'https://api.example.com',
     };
@@ -258,7 +258,7 @@ describe('Environment Configuration', () => {
       const envWithoutAudience = {
         AUTH0_DOMAIN: 'test.auth0.com',
         AUTH0_CLIENT_ID: 'test-client-id',
-        BASE_URL: 'https://example.com',
+        APP_BASE_URL: 'https://example.com',
       };
 
       const result = assignFromEnv(config, envWithoutAudience);
@@ -291,7 +291,7 @@ describe('Environment Configuration', () => {
         },
       };
       const invalidEnv = {
-        // Missing required AUTH0_DOMAIN, AUTH0_CLIENT_ID, BASE_URL
+        // Missing required AUTH0_DOMAIN, AUTH0_CLIENT_ID, APP_BASE_URL
         AUTH0_AUDIENCE: 'https://api.example.com',
       };
 
@@ -380,7 +380,7 @@ describe('Environment Configuration', () => {
       const env = {
         AUTH0_DOMAIN: 'env.auth0.com',
         AUTH0_CLIENT_ID: 'env-client-id',
-        BASE_URL: 'https://env.example.com',
+        APP_BASE_URL: 'https://env.example.com',
       };
 
       const result = assignFromEnv(config, env);
@@ -404,7 +404,7 @@ describe('Environment Configuration', () => {
       const env = {
         AUTH0_DOMAIN: 'env.auth0.com',
         AUTH0_CLIENT_ID: 'env-client-id',
-        BASE_URL: 'https://env.example.com',
+        APP_BASE_URL: 'https://env.example.com',
         AUTH0_CLIENT_SECRET: 'env-secret',
         AUTH0_SESSION_ENCRYPTION_KEY: 'env-secret-longer-than-32-chars',
       };
@@ -444,7 +444,7 @@ describe('Environment Configuration', () => {
       const env = {
         AUTH0_DOMAIN: 'test.auth0.com',
         AUTH0_CLIENT_ID: 'test-client-id',
-        BASE_URL: 'https://example.com',
+        APP_BASE_URL: 'https://example.com',
         AUTH0_SESSION_ENCRYPTION_KEY: 'env-secret-longer-than-32-chars-x',
       };
 
@@ -463,7 +463,7 @@ describe('Environment Configuration', () => {
       const env = {
         AUTH0_DOMAIN: 'test.auth0.com',
         AUTH0_CLIENT_ID: 'test-client-id',
-        BASE_URL: 'https://example.com',
+        APP_BASE_URL: 'https://example.com',
         AUTH0_SESSION_ENCRYPTION_KEY: 'env-secret-longer-than-32-chars-x',
       };
 
@@ -476,7 +476,7 @@ describe('Environment Configuration', () => {
       const env = {
         AUTH0_DOMAIN: 'test.auth0.com',
         AUTH0_CLIENT_ID: 'test-client-id',
-        BASE_URL: 'https://example.com',
+        APP_BASE_URL: 'https://example.com',
       };
 
       const result = assignFromEnv({}, env);
@@ -500,7 +500,7 @@ describe('Environment Configuration', () => {
       const runtimeEnv = {
         AUTH0_DOMAIN: 'runtime.auth0.com',
         AUTH0_CLIENT_ID: 'runtime-client-id',
-        BASE_URL: 'https://runtime.example.com',
+        APP_BASE_URL: 'https://runtime.example.com',
       };
 
       const result = assignFromEnv(config, runtimeEnv);

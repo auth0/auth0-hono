@@ -53,10 +53,42 @@ export type LoginParams = {
 };
 
 /**
+ * Security-critical parameters that MUST NOT be overridden via query string forwarding.
+ * These are computed by the SDK/server-js and overriding them breaks OIDC security.
+ *
+ * Matches nextjs-auth0's INTERNAL_AUTHORIZE_PARAMS:
+ * https://github.com/auth0/nextjs-auth0/blob/main/src/server/auth-client.ts
+ */
+const BLOCKED_FORWARD_PARAMS = new Set([
+  'client_id',
+  'redirect_uri',
+  'response_type',
+  'code_challenge',
+  'code_challenge_method',
+  'state',
+  'nonce',
+]);
+
+/**
  * Handle login requests.
  *
  * Initiates the authorization flow with Auth0, optionally with custom
  * authorization parameters and redirect URL.
+ *
+ * ## Authorization Parameter Priority
+ *
+ * Matches nextjs-auth0 pattern (query > config, security params blocked):
+ *
+ * 1. config.authorizationParams (base — lowest priority)
+ * 2. params.authorizationParams (developer per-call override — medium)
+ * 3. forwardAuthorizationParams from query string (user-driven — highest)
+ * 4. BLOCKED_FORWARD_PARAMS excluded from all query forwarding (SDK-computed)
+ *
+ * server-js additionally merges ServerClientOptions.authorizationParams (constructor)
+ * as the base under all of the above.
+ *
+ * This allows patterns like: `/auth/login?audience=https://api2.example.com&login_hint=user@example.com`
+ * while preventing: `/auth/login?response_type=token&redirect_uri=https://evil.com`
  */
 export const login = (params: LoginParams = {}) => {
   return createMiddleware<OIDCEnv>(async function (c) {
@@ -80,6 +112,13 @@ export const login = (params: LoginParams = {}) => {
 
       if (forwardParams && forwardParams.length > 0) {
         for (const param of forwardParams) {
+          // SECURITY: Block security-critical params even if developer lists them.
+          // These are always SDK-computed (PKCE, state, nonce) or fixed (response_type, redirect_uri).
+          if (BLOCKED_FORWARD_PARAMS.has(param)) {
+            debug(`Blocked forwarding of security-critical param "${param}" from query string`);
+            continue;
+          }
+
           const value = c.req.query(param);
 
           if (value) {
@@ -90,6 +129,9 @@ export const login = (params: LoginParams = {}) => {
         }
       }
 
+      // Priority: query forwarded params override explicit params.authorizationParams.
+      // This matches nextjs-auth0 behavior: query > config (allows dynamic login_hint,
+      // audience override from application routes). Security params already blocked above.
       const authParams: Partial<OIDCAuthorizationRequestParams> = {
         ...(params.authorizationParams ?? {}),
         ...paramsFromQuery,

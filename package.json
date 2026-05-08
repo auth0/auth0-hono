@@ -66,8 +66,18 @@
   "peerDependencies": {
     "hono": ">=3.0.0"
   },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./lib/honoEnv": {
+      "import": "./dist/lib/honoEnv.js",
+      "types": "./dist/lib/honoEnv.d.ts"
+    }
+  },
   "publishConfig": {
     "access": "public",
-    "tag": "latest"
+    "tag": "beta"
   }
 }

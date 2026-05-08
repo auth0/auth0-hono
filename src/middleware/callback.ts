@@ -131,7 +131,8 @@ export const callback = (params: CallbackParams = {}) => {
         try {
           const hookResult = await hook(c, error, null);
           if (hookResult instanceof Response) {
-            await resumeSilentLogin()(c, next);
+            // On error path with custom response, still don't clear skip cookie
+            // to prevent silent login redirect loops
             return hookResult;
           }
           // Per design M4: any other return on error path is ignored
@@ -141,7 +142,10 @@ export const callback = (params: CallbackParams = {}) => {
       }
 
       // Always throw original error — hook failure never masks it
-      await resumeSilentLogin()(c, next);
+      // NOTE: Do NOT call resumeSilentLogin() on error path.
+      // If this error came from a prompt=none silent login attempt,
+      // clearing the skip cookie would trigger an infinite redirect loop:
+      // request → silent login → callback error → clear cookie → request → ...
       throw error;
     }
   });

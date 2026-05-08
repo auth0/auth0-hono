@@ -4,10 +4,11 @@ import { Context, Next } from 'hono';
 import { accepts } from 'hono/accepts';
 import { login } from './login.js';
 import { LoginRequiredError } from '@/errors/index.js';
+import { getCachedSession } from '@/helpers/sessionCache.js';
 
 type OnRequiredAuth = 'error' | 'login';
 /**
- * This middleware checks if the user is authetnicated.
+ * This middleware checks if the user is authenticated.
  *
  * If not:
  * - If the request accepts HTML and errorOnRequiredAuth is false
@@ -19,8 +20,8 @@ type OnRequiredAuth = 'error' | 'login';
  */
 export function requiresAuth(behavior?: OnRequiredAuth) {
   return async (c: Context<OIDCEnv>, next: Next) => {
-    const { client, configuration } = getClient(c);
-    const session = await client.getSession(c);
+    const { configuration } = getClient(c);
+    const session = await getCachedSession(c);
 
     // Check if user is authenticated
     if (!session) {

@@ -161,9 +161,9 @@ describe('callback middleware', () => {
       mockClient.completeInteractiveLogin.mockRejectedValue(new Error('Authorization code grant failed'));
     });
 
-    it('should call resumeSilentLogin and then propagate the error', async () => {
+    it('should NOT call resumeSilentLogin on error path (prevents redirect loop)', async () => {
       await expect(callback()(mockContext, nextFn)).rejects.toThrow('Authorization code grant failed');
-      expect(resumeSilentLoginMiddleware).toHaveBeenCalledWith(mockContext, nextFn);
+      expect(resumeSilentLoginMiddleware).not.toHaveBeenCalled();
     });
   });
 
@@ -186,8 +186,8 @@ describe('callback middleware', () => {
       }
     });
 
-    it('should call resumeSilentLogin', () => {
-      expect(resumeSilentLoginMiddleware).toHaveBeenCalledWith(mockContext, nextFn);
+    it('should NOT call resumeSilentLogin on error path (prevents redirect loop)', () => {
+      expect(resumeSilentLoginMiddleware).not.toHaveBeenCalled();
     });
 
     it('should throw the error', () => {

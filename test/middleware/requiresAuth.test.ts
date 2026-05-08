@@ -6,6 +6,7 @@ import { getClient } from '../../src/config/index';
 import { login } from '../../src/middleware/login';
 import { requiresAuth } from '../../src/middleware/requiresAuth';
 import { LoginRequiredError } from '../../src/errors/index';
+import { getCachedSession } from '../../src/helpers/sessionCache';
 
 // Mock dependencies
 vi.mock('hono/accepts', () => ({
@@ -18,6 +19,10 @@ vi.mock('../../src/config/index', () => ({
 
 vi.mock('../../src/middleware/login', () => ({
   login: vi.fn(),
+}));
+
+vi.mock('../../src/helpers/sessionCache', () => ({
+  getCachedSession: vi.fn(),
 }));
 
 describe('requiresAuth middleware', () => {
@@ -40,6 +45,9 @@ describe('requiresAuth middleware', () => {
 
     // Mock context
     mockContext = {} as unknown as Context;
+
+    // Default: no session (getCachedSession returns null)
+    (getCachedSession as Mock).mockResolvedValue(null);
 
     // Mock login middleware
     mockLoginMiddleware = vi.fn().mockImplementation(() => Promise.resolve(undefined));
@@ -64,7 +72,7 @@ describe('requiresAuth middleware', () => {
   describe('when user is authenticated', () => {
     beforeEach(() => {
       // Set authenticated by returning a session
-      mockClient.getSession.mockResolvedValue({ user: { sub: '123' } });
+      (getCachedSession as Mock).mockResolvedValue({ user: { sub: '123' } });
     });
 
     it('should continue to the next middleware', async () => {

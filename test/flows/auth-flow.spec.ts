@@ -19,7 +19,7 @@ vi.mock('hono/adapter', () => ({
       AUTH0_CLIENT_ID: 'test_client_id',
       AUTH0_CLIENT_SECRET: 'test_client_secret_' + 'x'.repeat(20),
       AUTH0_SESSION_ENCRYPTION_KEY: 'test_secret_' + 'x'.repeat(22),
-      BASE_URL: 'https://app.test.com',
+      APP_BASE_URL: 'https://app.test.com',
     };
   }),
 }));

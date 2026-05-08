@@ -7,20 +7,53 @@ import { Configuration, InitConfiguration } from './Configuration.js';
 import { ConfigurationSchema } from './Schema.js';
 import { assignFromEnv } from './envConfig.js';
 
-const parsedConfig = new Map<string, Configuration>();
-
 /**
- * Parse and validate configuration with caching.
- * Uses JSON-serialized config as cache key to support both reference reuse
- * (auth0() middleware) and value-equivalent objects (standalone ensureClient).
+ * Two-tier configuration cache.
+ *
+ * Zod .parse() costs ~1-2ms. Caching avoids re-parsing on every request.
+ * Config objects can contain non-serializable function fields (debug, fetch, onCallback)
+ * which JSON.stringify drops — making JSON-only caching produce false cache hits
+ * when two configs differ only in their function fields.
+ *
+ * Tier 1 — WeakMap by object reference:
+ *   Serves auth0() middleware which reuses the same config object (closure variable).
+ *   Functions preserved correctly. O(1) lookup. Auto-GC via WeakMap.
+ *
+ * Tier 2 — Map by JSON.stringify key:
+ *   Serves ensureClient() which creates a new config object per request from env(c).
+ *   These configs never contain functions (env-only), so JSON serialization is safe
+ *   and collision-free.
+ *
+ * Why not single-tier:
+ *   - WeakMap only: ensureClient() always misses (new object each request) → re-parse every call.
+ *   - JSON only: auth0() configs with different functions get same key → wrong function used.
+ *   - Mutating config (Symbol ID): violates user expectations, breaks Object.freeze'd configs.
+ *
+ * Implicit idempotency: auth0() uses reference identity, ensureClient() uses value identity.
+ * No customer-facing key needed.
  */
+const parsedConfigByRef = new WeakMap<object, Configuration>();
+const parsedConfigByValue = new Map<string, Configuration>();
+
 export const parseConfiguration = (config: InitConfiguration): Configuration => {
-  const cacheKey = JSON.stringify(config);
-  if (parsedConfig.has(cacheKey)) {
-    return parsedConfig.get(cacheKey)!;
+  // Tier 1: Reference equality (auth0() middleware — same closure object every request)
+  if (parsedConfigByRef.has(config)) {
+    return parsedConfigByRef.get(config)!;
   }
+
+  // Tier 2: Value equality (ensureClient() — new object from env, no functions)
+  const cacheKey = JSON.stringify(config);
+  if (parsedConfigByValue.has(cacheKey)) {
+    const cached = parsedConfigByValue.get(cacheKey)!;
+    // Promote to Tier 1 for future hits with same reference
+    parsedConfigByRef.set(config, cached);
+    return cached;
+  }
+
+  // Cache miss — full Zod parse
   const result = ConfigurationSchema.parse(config) as Configuration;
-  parsedConfig.set(cacheKey, result);
+  parsedConfigByRef.set(config, result);
+  parsedConfigByValue.set(cacheKey, result);
   return result;
 };
 

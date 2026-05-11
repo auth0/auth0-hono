@@ -1,6 +1,15 @@
-# Hono Auth0 Middleware
+# @auth0/auth0-hono
 
-An Auth0 authentication middleware for [Hono](https://hono.dev) web framework. Built on top of the official [Auth0 SDK](https://www.npmjs.com/package/@auth0/auth0-server-js), this package provides a simple way to secure your Hono applications using Auth0 authentication.
+[![npm](https://img.shields.io/npm/v/@auth0/auth0-hono.svg?style=flat-square)](https://www.npmjs.com/package/@auth0/auth0-hono)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+
+The official Auth0 SDK for the [Hono](https://hono.dev) web framework — login, logout, session management, token access, and route protection as native Hono middleware. Works across Node.js, Cloudflare Workers, Bun, Deno, and Vercel Edge.
+
+## Overview
+
+Hono is one of the fastest-growing web frameworks in the JS ecosystem, running everywhere — edge, serverless, traditional servers — with a unified API. This SDK brings Auth0 authentication to Hono with zero setup: one `auth0()` middleware call and auth just works.
+
+Built on the foundation of `@auth0/auth0-server-js`, this SDK provides Hono-idiomatic middleware for authentication, authorization, session management, and token handling — without rewriting OIDC code.
 
 ## Installation
 
@@ -8,328 +17,528 @@ An Auth0 authentication middleware for [Hono](https://hono.dev) web framework. B
 npm install @auth0/auth0-hono
 ```
 
-## Basic Usage
+## Quick Start
 
-The simplest way to secure your Hono application is to implement the middleware at the application level. By default, all routes will require authentication.
+```typescript
+import { Hono } from 'hono'
+import { auth0, requiresAuth } from '@auth0/auth0-hono'
 
-```ts
-import { Hono } from "hono";
-import { auth } from "@auth0/auth0-hono";
+const app = new Hono()
 
-const app = new Hono();
+// Add auth to every route
+app.use('*', auth0())
 
-// Configure auth middleware with Auth0 options
-app.use(
-  auth({
-    domain: process.env.AUTH0_DOMAIN,
-    clientID: process.env.AUTH0_CLIENT_ID,
-    clientSecret: process.env.AUTH0_CLIENT_SECRET,
-    baseURL: process.env.BASE_URL,
-    session: {
-      secret: "password_at_least_32_characters_long",
-    },
-  }),
-);
+// Public route
+app.get('/', (c) => c.text('Home'))
 
-app.get("/", (c) => {
-  return c.text(`Hello ${c.var.auth0Client?.getSession(c)?.user?.name}!`);
-});
+// Protected route
+app.get('/profile', requiresAuth(), (c) => {
+  const user = c.var.auth0.user
+  return c.json({ name: user?.name, sub: user?.sub })
+})
 
-export default app;
+export default app
 ```
 
-## Features
+## Configuration
 
-- **Auth0 Authentication Flow**: Implements the Auth0 authorization code flow
-- **Session Management**: Built-in session support with configurable cookie settings
-- **Configurable Routes**: Customize login, callback, and logout route paths
-- **Selective Protection**: Choose which routes require authentication with the `authRequired` option
-- **Token Management**: Handles access tokens, ID tokens and refresh tokens
-- **User Information**: Automatically fetches and provides user profile data
-- **Claim-Based Authorization**: Middleware for authorizing based on claims from tokens
-- **PKCE Support**: Implements Proof Key for Code Exchange for enhanced security
-- **Environment Flexibility**: Works across various environments including Node.js, Bun, Cloudflare Workers, and more
+### Environment Variables
 
-## Configuration Options
+The SDK reads configuration from Hono's environment (works across all runtimes — Node.js, CF Workers, Bun, Deno):
 
-### Required Configuration
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTH0_DOMAIN` | Yes | Auth0 domain (e.g., `tenant.auth0.com`) |
+| `AUTH0_CLIENT_ID` | Yes | Auth0 application client ID |
+| `AUTH0_CLIENT_SECRET` | No | Client secret (required for refresh token flow) |
+| `AUTH0_SESSION_ENCRYPTION_KEY` | Yes | 32+ character encryption key for session cookies |
+| `APP_BASE_URL` | Yes | Base URL of your application (e.g., `https://myapp.com`) |
 
-| Option     | Type     | Description                                              |
-| ---------- | -------- | -------------------------------------------------------- |
-| `domain`   | `string` | Auth0 domain (e.g., `your-tenant.auth0.com`)             |
-| `baseURL`  | `string` | Base URL of your application (e.g., `https://myapp.com`) |
-| `clientID` | `string` | Client ID provided by Auth0                              |
+**.env example:**
 
-### Optional Configuration
-
-| Option                        | Type            | Default     | Description                                                                                                 |
-| ----------------------------- | --------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `clientSecret`                | `string`        | `undefined` | Client Secret provided by Auth0 (required for most flows)                                                   |
-| `authRequired`                | `boolean`       | `true`      | Whether authentication is required for all routes                                                           |
-| `idpLogout`                   | `boolean`       | `false`     | Whether to perform logout at Auth0 when logging out locally                                                 |
-| `pushedAuthorizationRequests` | `boolean`       | `false`     | Enable Pushed Authorization Requests (PAR)                                                                  |
-| `customRoutes`                | `Array<string>` | `[]`        | Specify which built-in routes to skip (options: `'login'`, `'callback'`, `'logout'`, `'backchannelLogout'`) |
-| `errorOnRequiredAuth`         | `boolean`       | `false`     | Return 401 if the user is not authenticated                                                                 |
-| `attemptSilentLogin`          | `boolean`       | `false`     | Whether to attempt a silent login                                                                           |
-
-### Routes Configuration
-
-You can customize the paths for login, callback, logout, and backchannel logout endpoints:
-
-```ts
-app.use(
-  auth({
-    // ...required options
-    routes: {
-      login: "/custom-login",
-      callback: "/auth-callback",
-      logout: "/sign-out",
-      backchannelLogout: "/backchannel-logout",
-    },
-  }),
-);
+```
+AUTH0_DOMAIN=tenant.auth0.com
+AUTH0_CLIENT_ID=abc123
+AUTH0_CLIENT_SECRET=secret123
+AUTH0_SESSION_ENCRYPTION_KEY=very_long_string_with_at_least_32_characters
+APP_BASE_URL=https://myapp.com
 ```
 
-### Session Configuration
+### Explicit Configuration
 
-The middleware uses [hono-sessions](https://www.npmjs.com/package/hono-sessions) for session management. You can configure session options or disable sessions entirely:
+Override or augment environment variables with explicit config:
 
-```ts
+```typescript
 app.use(
-  auth({
-    // ...required options
+  '*',
+  auth0({
+    domain: 'tenant.auth0.com',
+    clientID: 'abc123',
+    clientSecret: 'secret123',
+    baseURL: 'https://myapp.com',
     session: {
-      secret: "your-secure-encryption-key-minimum-32-chars",
-      rolling: true, // optional, default: true
-      absoluteDuration: 259200, // optional, default: 3 days (in seconds)
-      inactivityDuration: 86400, // optional, default: 1 day (in seconds)
+      secret: 'your_32_char_secret_key_here',
       cookie: {
-        name: "my_session", // optional, default: "appSession"
-        sameSite: "lax", // optional, default: "lax"
-        secure: process.env.NODE_ENV === "production", // optional, auto-determined if not set
+        name: 'auth_session',
+        sameSite: 'lax',
+        secure: true,
       },
     },
-  }),
-);
-```
-
-### Authorization Parameters
-
-You can customize the parameters sent to the authorization endpoint:
-
-```ts
-app.use(
-  auth({
-    // ...required options
     authorizationParams: {
-      response_type: "code",
-      scope: "openid profile email",
-      response_mode: "query",
+      scope: 'openid profile email',
+      audience: 'https://api.myapp.com',
     },
-  }),
-);
+  })
+)
 ```
 
-### Error handling
+**Config precedence:** explicit config > environment variables > schema defaults
 
-You can catch `Auth0Exception` errors and handle them in your application. This is useful for logging or displaying custom error messages.
+> **Known limitation:** Configuration is captured from the first request (singleton pattern). Multi-tenant deployments where different requests have different environment bindings (e.g., Cloudflare Workers with per-route env) should use separate `auth0()` middleware instances with explicit config objects rather than relying on environment variables.
 
-```js
-import { Auth0Exception } from "@auth0/auth0-hono";
+## Middleware Reference
+
+### `auth0(config?)`
+
+Main middleware — sets up routes, session management, and context population.
+
+```typescript
+app.use('*', auth0())
+```
+
+**What it handles automatically:**
+- Login/callback/logout routes (`/auth/login`, `/auth/callback`, `/auth/logout`)
+- Backchannel logout
+- Session encryption and cookie management
+- User data available on every request via `c.var.auth0.user`
+- Token refresh (transparent, deduplicated)
+
+**Options:**
+```typescript
+{
+  domain?: string                           // Auth0 domain
+  clientID?: string                         // Client ID
+  clientSecret?: string                     // Client secret
+  baseURL?: string                          // App base URL
+  session?: {
+    secret: string | string[]               // Encryption key(s) — supports rotation
+    cookie?: {
+      name?: string                         // Default: 'appSession'
+      domain?: string
+      sameSite?: 'lax' | 'strict' | 'none'
+      secure?: boolean
+    }
+    store?: SessionStore                    // Custom session store (optional)
+  }
+  authorizationParams?: Record<string, any> // Scope, audience, etc.
+  routes?: {
+    login?: string                          // Default: '/auth/login'
+    callback?: string                       // Default: '/auth/callback'
+    logout?: string                         // Default: '/auth/logout'
+    backchannelLogout?: string              // Default: '/auth/backchannel-logout'
+  }
+  onCallback?: (c, error, session) => ...   // Post-login hook (see Hooks below)
+  attemptSilentLogin?: boolean              // Default: false
+  fetch?: typeof global.fetch               // Custom fetch (optional)
+}
+```
+
+### `requiresAuth()`
+
+Enforce authentication on protected routes. Returns 401 on unauthenticated requests.
+
+```typescript
+app.get('/dashboard', requiresAuth(), (c) => {
+  // c.var.auth0.user is guaranteed to exist here
+  return c.json(c.var.auth0.user)
+})
+```
+
+### `requiresOrg(options?)`
+
+Enforce organization membership. Throws `AccessDeniedError` if user is not in the specified organization.
+
+```typescript
+// Any organization
+app.get('/admin', requiresAuth(), requiresOrg(), handler)
+
+// Specific organization
+app.get('/admin', requiresAuth(), requiresOrg({ orgId: 'org_123' }), handler)
+
+// Custom check
+app.get('/admin', requiresAuth(), requiresOrg((c) => {
+  return c.var.auth0.user?.org_id === 'org_123'
+}), handler)
+```
+
+### `claimEquals(claim, value)`
+
+Check if a claim equals an expected value.
+
+```typescript
+app.get('/admin',
+  requiresAuth(),
+  claimEquals('role', 'admin'),
+  handler
+)
+```
+
+### `claimIncludes(claim, ...values)`
+
+Check if a claim array includes any of the provided values.
+
+```typescript
+app.get('/reports',
+  requiresAuth(),
+  claimIncludes('permissions', 'read:reports', 'admin:reports'),
+  handler
+)
+```
+
+### `claimCheck(fn)`
+
+Custom claim validation function.
+
+```typescript
+app.get('/restricted',
+  requiresAuth(),
+  claimCheck((user) => user.email_verified === true),
+  handler
+)
+```
+
+## Helpers
+
+### `getSession(c)`
+
+Retrieve the full session object. Returns `null` if unauthenticated.
+
+```typescript
+const session = await getSession(c)
+if (session) {
+  console.log(session.user.email)
+}
+```
+
+### `getUser(c)`
+
+Get the authenticated user. Throws `MissingSessionError` if not authenticated.
+
+```typescript
+const user = getUser(c)
+console.log(user.name)
+```
+
+### `getAccessToken(c)`
+
+Get an access token. Automatically refreshes if expired. The token audience is determined by `authorizationParams.audience` in the `auth0()` middleware config.
+
+```typescript
+const { accessToken } = await getAccessToken(c)
+
+// Use in API call
+const res = await fetch('https://api.example.com/data', {
+  headers: { Authorization: `Bearer ${accessToken}` }
+})
+```
+
+**Token deduplication:** If 5 parallel requests call `getAccessToken()` and a refresh is needed, only 1 refresh request is made. Others await the same promise.
+
+> **Note:** For connection-scoped tokens (e.g., Google OAuth2), use `getAccessTokenForConnection()` instead.
+
+### `getAccessTokenForConnection(c, options)`
+
+Get a token for a specific connection (for service-to-service communication).
+
+```typescript
+const token = await getAccessTokenForConnection(c, {
+  connection: 'google-oauth2',
+  loginHint: 'user@example.com'
+})
+```
+
+### `updateSession(c, data)`
+
+Merge custom data into the session. Reserved fields (`user`, `idToken`, `refreshToken`, `internal`) are protected.
+
+```typescript
+await updateSession(c, {
+  permissions: ['read:data', 'write:data'],
+  customField: 'custom value'
+})
+
+// Now available on all subsequent requests
+const perms = c.var.auth0.session?.permissions
+```
+
+## Standalone Handlers
+
+Use authentication handlers without the `auth0()` middleware:
+
+```typescript
+import {
+  handleLogin,
+  handleLogout,
+  handleCallback,
+  handleBackchannelLogout
+} from '@auth0/auth0-hono'
+
+// Mount handlers on custom routes
+app.get('/login', handleLogin())
+app.get('/logout', handleLogout())
+app.get('/callback', handleCallback())
+app.post('/logout-notify', handleBackchannelLogout())
+```
+
+These resolve configuration from environment variables automatically.
+
+## Hooks
+
+### `onCallback(c, error, session)`
+
+Run custom logic after a successful login or on login error. Use for session enrichment, error customization, or logging.
+
+```typescript
+app.use('*', auth0({
+  async onCallback(c, error, session) {
+    if (error) {
+      // Error path: return custom error page or response
+      return c.redirect('/login?error=true')
+    }
+
+    // Success path: enrich session with custom data
+    const permissions = await fetchUserPermissions(session.user.sub)
+    return {
+      ...session,
+      permissions
+    }
+  }
+}))
+```
+
+**Contract:**
+- **Success:** `error` is `null`, `session` is populated. Return enriched `SessionData` or `Response`.
+- **Error:** `error` is `Auth0Error`, `session` is `null`. Return `Response` to override error page. Return value ignored otherwise.
+- **Promise rejection in hook:** Original error always propagates.
+
+## Error Handling
+
+The SDK throws typed errors that extend Hono's `HTTPException`. Catch and handle them in `app.onError`:
+
+```typescript
+import {
+  Auth0Error,
+  AccessDeniedError,
+  LoginRequiredError,
+  InvalidGrantError
+} from '@auth0/auth0-hono'
 
 app.onError((err, c) => {
-  // Handle Auth0-specific errors
-  if (err instanceof Auth0Exception) {
-    console.log(err);
-    if (process.env.NODE_ENV === "development") {
-      return err.getResponse();
-    }
-    return c.text(`Authentication Error`, 500);
-  }
-  // Handle other errors
-  return c.text(`Internal Server Error: ${err.message}`, 500);
-});
-```
-
-### Configuration through Environment Variables
-
-You can configure the middleware using environment variables instead of passing configuration options directly. This is particularly useful for deployment environments where you want to keep sensitive values in environment variables.
-
-The following environment variables are supported:
-
-| Environment Variable           | Required | Description                                                        |
-| ------------------------------ | -------- | ------------------------------------------------------------------ |
-| `AUTH0_DOMAIN`                 | Yes      | The Auth0 domain (e.g., `your-tenant.auth0.com`)                   |
-| `AUTH0_CLIENT_ID`              | Yes      | The client ID provided by Auth0                                    |
-| `BASE_URL`                     | Yes      | The base URL of your application (e.g., `https://myapp.com`)       |
-| `AUTH0_CLIENT_SECRET`          | No       | The client secret provided by Auth0 (required for most flows)      |
-| `AUTH0_AUDIENCE`               | No       | The API audience identifier for your Auth0 API                     |
-| `AUTH0_SESSION_ENCRYPTION_KEY` | No       | The secret key used for session encryption (minimum 32 characters) |
-
-When environment variables are set, they will be used as defaults for the corresponding configuration options. You can still override them by passing explicit values in the configuration object.
-
-**Example using only environment variables:**
-
-```bash
-# .env file
-AUTH0_DOMAIN=your-tenant.auth0.com
-AUTH0_CLIENT_ID=your_client_id
-AUTH0_CLIENT_SECRET=your_client_secret
-BASE_URL=https://localhost:3000
-AUTH0_SESSION_ENCRYPTION_KEY=your_32_character_minimum_secret_key
-AUTH0_AUDIENCE=https://api.yourapp.com
-```
-
-```ts
-import { Hono } from "hono";
-import { auth } from "@auth0/auth0-hono";
-
-const app = new Hono();
-
-// No configuration object needed - will use environment variables
-app.use(auth());
-
-app.get("/", (c) => {
-  return c.text(`Hello ${c.var.auth0Client?.getSession(c)?.user?.name}!`);
-});
-```
-
-**Example with mixed configuration (environment + explicit):**
-
-```ts
-app.use(
-  auth({
-    // These will override environment variables if set
-    authRequired: false,
-    routes: {
-      login: "/custom-login",
-      callback: "/auth-callback",
-    },
-    // Other options like domain, clientID, etc. will use environment variables
-  }),
-);
-```
-
-## Advanced Usage
-
-### Selective Route Protection
-
-Only protect specific routes:
-
-```ts
-import { Hono } from "hono";
-import { auth, requiresAuth } from "@auth0/auth0-hono";
-
-const app = new Hono();
-
-app.use(
-  auth({
-    // ...required options
-    authRequired: false,
-  }),
-);
-
-// Public route - no authentication required
-app.get("/", (c) => {
-  return c.text("This is a public page");
-});
-
-// Protected route - authentication required
-app.use("/profile/*", requiresAuth());
-app.get("/profile", (c) => {
-  const user = c.var.oidc.user;
-  return c.text(`Hello ${user.name || user.sub}!`);
-});
-```
-
-### Silent Login Attempt
-
-Try to authenticate silently without user interaction:
-
-```ts
-import { Hono } from "hono";
-import { auth, attemptSilentLogin } from "@auth0/auth0-hono";
-
-const app = new Hono();
-
-app.use(
-  auth({
-    /* ...options */
-    authRequired: false,
-  }),
-);
-
-app.get("/", attemptSilentLogin(), async (c) => {
-  if (c.var.oidc?.isAuthenticated) {
-    return c.text(`Hello ${c.var.oidc.user.name}!`);
+  if (err instanceof AccessDeniedError) {
+    return c.json({ error: 'Access denied' }, 403)
   }
 
-  return c.text("You are not logged in");
-});
+  if (err instanceof LoginRequiredError) {
+    return c.redirect('/auth/login')
+  }
+
+  if (err instanceof InvalidGrantError) {
+    return c.json({ error: 'Token expired, please log in again' }, 401)
+  }
+
+  if (err instanceof Auth0Error) {
+    return c.json(
+      { error: err.code, error_description: err.description },
+      err.status
+    )
+  }
+
+  // Other errors
+  return c.json({ error: 'Internal server error' }, 500)
+})
 ```
 
-### Advanced Login Options
+### Error Classes
 
-The login middleware supports several advanced options:
+| Class | HTTP Status | Code | When Thrown |
+|-------|-------------|------|------------|
+| `Auth0Error` | 500 | `unknown_error` | Base class — catch-all |
+| `LoginRequiredError` | 401 | `login_required` | `requiresAuth()` on unauthenticated request |
+| `AccessDeniedError` | 403 | `access_denied` | Authorization check failed (claims, organization) |
+| `InvalidGrantError` | 401 | `invalid_grant` | Refresh token expired or invalid |
+| `MissingSessionError` | 401 | `missing_session` | `getUser()` called without session |
+| `MissingTransactionError` | 400 | `missing_transaction` | Callback without login transaction |
+| `TokenRefreshError` | 401 | `token_refresh_error` | Token refresh failed |
+| `ConnectionTokenError` | 401 | `connection_token_error` | Connection token request failed |
 
-```ts
-import { login } from "@auth0/auth0-hono";
+All errors respond with OAuth2-compliant JSON:
 
-// Custom login options
-app.get("/custom-login", async (c) => {
-  return login({
-    // Redirect user to this URL after successful authentication
-    redirectAfterLogin: "/dashboard",
-
-    // Additional authorization parameters to send to the identity provider
-    authorizationParams: {
-      prompt: "consent",
-      acr_values: "level2",
-      login_hint: "user@example.com",
-    },
-
-    // Forward specific query parameters from the login request to the authorization request
-    forwardQueryParams: ["ui_locales", "login_hint", "campaign"],
-
-    // Attempt silent authentication (no user interaction)
-    silent: false,
-  })(c);
-});
+```json
+{
+  "error": "access_denied",
+  "error_description": "User does not belong to the required organization"
+}
 ```
 
-With `forwardQueryParams`, you can pass query parameters from the login request to the authorization request. This is useful for:
+## Multi-Runtime Support
 
-- Passing UI locale preferences (`ui_locales`)
-- Forwarding login hints to the identity provider
-- Maintaining tracking parameters throughout the authentication flow
-- Supporting custom parameters your identity provider accepts
+This SDK works across multiple JavaScript runtimes:
 
-## Feedback
+| Runtime | Level | Status |
+|---------|-------|--------|
+| Node.js 18+ | Primary | Full support |
+| Cloudflare Workers | Primary | Full support |
+| Bun 1.x+ | Secondary | Works, best-effort testing |
+| Deno 1.x/2.x | Secondary | Works, best-effort testing |
+| Vercel Edge | Secondary | Works, best-effort testing |
 
-### Contributing
+**Key:** The SDK uses Hono's `env(c)` adapter for all environment variable access, making it runtime-agnostic. No `process.env` anywhere on the critical path.
 
-We appreciate feedback and contribution to this repo! Before you get started, please see the following:
+## TypeScript
 
-- [Auth0's general contribution guidelines](https://github.com/auth0/open-source-template/blob/master/GENERAL-CONTRIBUTING.md)
-- [Auth0's code of conduct guidelines](https://github.com/auth0/open-source-template/blob/master/CODE-OF-CONDUCT.md)
+Full TypeScript support with types for context, session, user, and tokens.
 
-### Raise an issue
+### Context Types
 
-To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0-lab/auth0-hono/issues).
+Use `OIDCEnv` for strict typing of middleware handlers:
 
-### Vulnerability Reporting
+```typescript
+import { OIDCEnv, requiresAuth } from '@auth0/auth0-hono'
 
-Please do not report security vulnerabilities on the public GitHub issue tracker. The [Responsible Disclosure Program](https://auth0.com/responsible-disclosure-policy) details the procedure for disclosing security issues.
+app.get('/protected', requiresAuth(), (c: Context<OIDCEnv>) => {
+  // c.var.auth0 is fully typed and non-null here
+  const user = c.var.auth0.user
+  const session = c.var.auth0.session
+  const org = c.var.auth0.org
+  return c.json({ user, session, org })
+})
+```
+
+### Augmenting Hono's ContextVariableMap
+
+To get autocomplete on `c.var.auth0` globally, import the type augmentation:
+
+```typescript
+import '@auth0/auth0-hono/lib/honoEnv'
+
+app.get('/', (c) => {
+  // c.var.auth0 now has autocomplete (but still optional — null check required)
+  if (c.var.auth0?.user) {
+    return c.json(c.var.auth0.user)
+  }
+})
+```
+
+### Type Definitions
+
+```typescript
+// User claims
+export interface Auth0User extends UserClaims {
+  sub: string           // Subject (user ID)
+  name?: string
+  email?: string
+  email_verified?: boolean
+  org_id?: string       // Organization ID (if in org)
+  org_name?: string     // Organization name (if in org)
+  [key: string]: any    // Custom claims
+}
+
+// Organization context
+export interface Auth0Organization {
+  id: string
+  name?: string
+}
+
+// Full session (all tokens, user, custom fields)
+export interface Auth0Session {
+  user: Auth0User
+  idToken: string
+  refreshToken?: string
+  tokenSets: TokenSet[]
+  // + custom fields from updateSession()
+  [key: string]: unknown
+}
+
+// Main context variable
+export interface Auth0Context {
+  user: Auth0User | null
+  session: Auth0Session | null
+  org: Auth0Organization | null
+}
+
+// Token set
+export type Auth0TokenSet = {
+  accessToken: string
+  audience: string
+  scope?: string
+  expiresAt: number
+}
+```
+
+## API Reference
+
+For detailed API documentation, see [DESIGN.md](./forge/design/DESIGN.md) (technical spec) and [BETA-OVERVIEW.md](./forge/design/BETA-OVERVIEW.md) (feature overview).
+
+## Troubleshooting
+
+### Environment variables not read on Cloudflare Workers?
+
+Ensure you're using environment variables correctly in your `wrangler.toml`:
+
+```toml
+[env.production]
+vars = { AUTH0_DOMAIN = "tenant.auth0.com", AUTH0_CLIENT_ID = "abc123" }
+```
+
+The SDK uses Hono's `env(c)` adapter, which correctly reads CF Workers bindings.
+
+### Session cookie too large?
+
+If you're enriching sessions with large data via `updateSession()`, consider using a custom stateful session store:
+
+```typescript
+import { SessionStore } from '@auth0/auth0-hono'
+
+const customStore: SessionStore = {
+  async set(name, data, isTransaction, ctx) {
+    // Store session data in your database
+    await db.sessions.set(data.internal.sid, data)
+  },
+  async get(name, ctx) {
+    // Retrieve from database
+    return await db.sessions.get(sessionId)
+  },
+  // ... delete, clear
+}
+
+app.use('*', auth0({
+  session: { secret: '...', store: customStore }
+}))
+```
+
+### Token not refreshing?
+
+Ensure `AUTH0_CLIENT_SECRET` is set and that the client has offline access enabled in your Auth0 dashboard.
+
+## Contributing
+
+We appreciate feedback and contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
+
+## Vulnerability Reporting
+
+Please do not report security vulnerabilities on GitHub. Use Auth0's [Responsible Disclosure Program](https://auth0.com/responsible-disclosure-policy).
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE) file for details.
 
 ---
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="https://cdn.auth0.com/website/sdks/logos/auth0_light_mode.png"   width="150">
+    <source media="(prefers-color-scheme: light)" srcset="https://cdn.auth0.com/website/sdks/logos/auth0_light_mode.png" width="150">
     <source media="(prefers-color-scheme: dark)" srcset="https://cdn.auth0.com/website/sdks/logos/auth0_dark_mode.png" width="150">
     <img alt="Auth0 Logo" src="https://cdn.auth0.com/website/sdks/logos/auth0_light_mode.png" width="150">
   </picture>
 </p>
-<p align="center">Auth0 is an easy to implement, adaptable authentication and authorization platform. To learn more checkout <a href="https://auth0.com/why-auth0">Why Auth0?</a></p>
-<p align="center">
-This project is licensed under the Apache 2.0 license. See the <a href="/LICENSE"> LICENSE</a> file for more info.</p>
+<p align="center">Auth0 is an easy to implement, adaptable authentication and authorization platform. Learn more at <a href="https://auth0.com/why-auth0">Why Auth0?</a></p>

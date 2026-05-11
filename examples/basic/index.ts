@@ -1,21 +1,17 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { auth, type OIDCEnv } from "../../src/index.js"; // Import from our local package
+import { auth0, type OIDCEnv } from "../../src/index.js";
 
-// Create the Hono app
 const app = new Hono<OIDCEnv>();
 
-// Configure auth middleware
-app.use(auth());
+app.use(auth0());
 
-// Add a simple protected route
-app.get("/", async (c) => {
-  const session = await c.var.auth0Client?.getSession(c);
+app.get("/", (c) => {
+  const session = c.var.auth0?.session;
   return c.text(`Hello ${session?.user?.name ?? "user"}!
     You are authenticated.`);
 });
 
-// Start the server
 console.log("Server starting at http://localhost:3000");
 
 serve({

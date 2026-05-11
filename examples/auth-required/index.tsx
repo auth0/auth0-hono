@@ -5,14 +5,12 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { jsx } from 'hono/jsx';
 import { jsxRenderer } from 'hono/jsx-renderer';
-import { OIDCEnv, attemptSilentLogin, auth, requiresAuth } from "../../src/index.js"; // Import from our local package
+import { OIDCEnv, attemptSilentLogin, auth0, requiresAuth } from "../../src/index.js";
 console.log(`jsx: ${!!jsx}`)
 
-// Create the Hono app
 const app = new Hono<OIDCEnv>();
 
-// Configure auth middleware
-app.use(auth({ authRequired: false }));
+app.use(auth0({ authRequired: false }));
 
 app.get(
   '/*',
@@ -36,12 +34,11 @@ app.get(
   })
 );
 
-// Add a simple protected route
-app.get("/", async (c) => {
-  const session = await c.var.auth0Client?.getSession(c);
+app.get("/", (c) => {
+  const session = c.var.auth0?.session;
   if (!session) {
     return c.render(<p>
-      You are currently not authenticated. Click <a href="/login">here</a> to login.
+      You are currently not authenticated. Click <a href="/auth/login">here</a> to login.
       <br />
     </p>)
   }
@@ -49,7 +46,7 @@ app.get("/", async (c) => {
     <p>
       Welcome {session.user?.name ?? 'user'}!
       You are authenticated.
-      Click <a href="/logout">here</a> to logout.
+      Click <a href="/auth/logout">here</a> to logout.
     </p>
   );
 });
@@ -75,8 +72,6 @@ app.get('/protected-silent',
   );
 });
 
-
-// Start the server
 console.log("Server starting at http://localhost:3000");
 
 serve({

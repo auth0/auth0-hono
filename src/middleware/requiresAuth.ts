@@ -1,13 +1,14 @@
-import { getClient } from "@/config/index.js";
-import { OIDCEnv } from "@/lib/honoEnv.js";
-import { Context, Next } from "hono";
-import { accepts } from "hono/accepts";
-import { HTTPException } from "hono/http-exception";
-import { login } from "./login.js";
+import { getClient } from '@/config/index.js';
+import { OIDCEnv } from '@/lib/honoEnv.js';
+import { Context, Next } from 'hono';
+import { accepts } from 'hono/accepts';
+import { login } from './login.js';
+import { LoginRequiredError } from '@/errors/index.js';
+import { getCachedSession } from '@/helpers/sessionCache.js';
 
-type OnRequiredAuth = "error" | "login";
+type OnRequiredAuth = 'error' | 'login';
 /**
- * This middleware checks if the user is authetnicated.
+ * This middleware checks if the user is authenticated.
  *
  * If not:
  * - If the request accepts HTML and errorOnRequiredAuth is false
@@ -19,27 +20,22 @@ type OnRequiredAuth = "error" | "login";
  */
 export function requiresAuth(behavior?: OnRequiredAuth) {
   return async (c: Context<OIDCEnv>, next: Next) => {
-    const { client, configuration } = getClient(c);
-    const session = await client.getSession(c);
+    const { configuration } = getClient(c);
+    const session = await getCachedSession(c);
 
     // Check if user is authenticated
     if (!session) {
       const acceptsHTML =
         accepts(c, {
-          header: "Accept",
-          supports: ["text/html", "application/json"],
-          default: "application/json",
-        }) === "text/html";
+          header: 'Accept',
+          supports: ['text/html', 'application/json'],
+          default: 'application/json',
+        }) === 'text/html';
 
-      const shouldFail =
-        !acceptsHTML ||
-        behavior === "error" ||
-        (!behavior && configuration.errorOnRequiredAuth);
+      const shouldFail = !acceptsHTML || behavior === 'error' || (!behavior && configuration.errorOnRequiredAuth);
 
       if (shouldFail) {
-        throw new HTTPException(401, {
-          message: "Authentication required",
-        });
+        throw new LoginRequiredError('Authentication required');
       }
 
       return login()(c, next);

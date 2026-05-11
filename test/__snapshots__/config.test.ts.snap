@@ -37,7 +37,7 @@ exports[`Configuration Parser > should parse a valid configuration 1`] = `
   "httpTimeout": 5000,
   "httpUserAgent": "hono-openid-connect",
   "idTokenSigningAlg": "RS256",
-  "idpLogout": false,
+  "idpLogout": true,
   "mountRoutes": true,
   "pushedAuthorizationRequests": false,
   "routes": {

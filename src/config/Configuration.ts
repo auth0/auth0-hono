@@ -1,5 +1,8 @@
-import { OIDCAuthorizationRequestParams } from "@/config/authRequest.js";
-import { SessionConfiguration } from "@/types/session.js";
+import { OIDCAuthorizationRequestParams } from '@/config/authRequest.js';
+import { SessionConfiguration } from '@/types/session.js';
+import { Context } from 'hono';
+import { SessionData } from '@auth0/auth0-server-js';
+import { Auth0Error } from '@/errors/Auth0Error.js';
 
 type Routes = {
   login: string;
@@ -138,12 +141,26 @@ export interface Configuration {
    */
   httpTimeout?: number;
 
-  // Hooks
-  // afterCallback?: (
-  //   c: Context,
-  //   session: OidcSession,
-  //   state: any,
-  // ) => Promise<OIDCUserInfoResponse> | OIDCUserInfoResponse;
+  /**
+   * Hook called on successful or failed login callback.
+   *
+   * On success (error is null):
+   * - Return SessionData to enrich the session (persisted)
+   * - Return Response to override the redirect response
+   * - Return void/undefined for default behavior
+   *
+   * On error (session is null):
+   * - Return Response to override the error page
+   * - Return anything else to be ignored (default error page shown)
+   * - Throw to mask the error (not recommended)
+   *
+   * Hook errors are logged but never mask the original auth error.
+   */
+  onCallback?: (
+    c: Context,
+    error: Auth0Error | null,
+    session: SessionData | null
+  ) => SessionData | Response | void | Promise<SessionData | Response | void>;
 
   /**
    * The method to use for client authentication.
@@ -156,12 +173,7 @@ export interface Configuration {
    *
    * Otherwise, the @default is `client_secret_basic`.
    */
-  clientAuthMethod:
-    | "client_secret_basic"
-    | "client_secret_post"
-    | "client_secret_jwt"
-    | "private_key_jwt"
-    | "none";
+  clientAuthMethod: 'client_secret_basic' | 'client_secret_post' | 'client_secret_jwt' | 'private_key_jwt' | 'none';
 
   /**
    * The client assertion signing key.
@@ -176,17 +188,17 @@ export interface Configuration {
    * @default 'RS256'
    */
   clientAssertionSigningAlg?:
-    | "RS256"
-    | "RS384"
-    | "RS512"
-    | "PS256"
-    | "PS384"
-    | "PS512"
-    | "ES256"
-    | "ES256K"
-    | "ES384"
-    | "ES512"
-    | "EdDSA";
+    | 'RS256'
+    | 'RS384'
+    | 'RS512'
+    | 'PS256'
+    | 'PS384'
+    | 'PS512'
+    | 'ES256'
+    | 'ES256K'
+    | 'ES384'
+    | 'ES512'
+    | 'EdDSA';
 
   /**
    * Returns 401 if the user is not authenticated.
@@ -246,7 +258,7 @@ export interface Configuration {
 }
 
 // Type for the required fields that must be provided in InitConfiguration
-type RequiredConfigFields = "domain" | "baseURL" | "clientID";
+type RequiredConfigFields = 'domain' | 'baseURL' | 'clientID';
 
 // Type for the optional session field that should be partial in InitConfiguration
 type SessionField = {
@@ -264,6 +276,6 @@ type RoutesField = {
  * since they have defaults in the schema.
  */
 export type InitConfiguration = Pick<Configuration, RequiredConfigFields> &
-  Partial<Omit<Configuration, RequiredConfigFields | "session" | "routes">> &
+  Partial<Omit<Configuration, RequiredConfigFields | 'session' | 'routes'>> &
   SessionField &
   RoutesField;

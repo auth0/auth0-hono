@@ -7,25 +7,25 @@
 
 // Response type options
 type ResponseType =
-  | "code" // Authorization Code Flow
-  | "token" // Implicit Flow (Access Token only)
-  | "id_token" // Implicit Flow (ID Token only)
-  | "id_token token" // Implicit Flow (both tokens)
-  | "code id_token" // Hybrid Flow
-  | "code token" // Hybrid Flow
-  | "code id_token token"; // Hybrid Flow
+  | 'code' // Authorization Code Flow
+  | 'token' // Implicit Flow (Access Token only)
+  | 'id_token' // Implicit Flow (ID Token only)
+  | 'id_token token' // Implicit Flow (both tokens)
+  | 'code id_token' // Hybrid Flow
+  | 'code token' // Hybrid Flow
+  | 'code id_token token'; // Hybrid Flow
 
 // Response mode options
-type ResponseMode = "query" | "fragment" | "form_post";
+type ResponseMode = 'query' | 'fragment' | 'form_post';
 
 // Display options
-type Display = "page" | "popup" | "touch" | "wap";
+type Display = 'page' | 'popup' | 'touch' | 'wap';
 
 // Prompt options
-type Prompt = "none" | "login" | "consent" | "select_account";
+type Prompt = 'none' | 'login' | 'consent' | 'select_account';
 
 // Code challenge method options for PKCE
-type CodeChallengeMethod = "plain" | "S256";
+type CodeChallengeMethod = 'plain' | 'S256';
 
 /**
  * OIDC Authorization Request Parameters
@@ -202,11 +202,4 @@ interface OIDCAuthorizationRequestParams {
 //   custom_param: 'custom_value'  // Custom parameter example
 // };
 
-export type {
-  CodeChallengeMethod,
-  Display,
-  OIDCAuthorizationRequestParams,
-  Prompt,
-  ResponseMode,
-  ResponseType,
-};
+export type { CodeChallengeMethod, Display, OIDCAuthorizationRequestParams, Prompt, ResponseMode, ResponseType };

@@ -1,5 +1,5 @@
-import { LogoutTokenClaims, StateData } from "@auth0/auth0-server-js";
-import { Context } from "hono";
+import { LogoutTokenClaims, StateData } from '@auth0/auth0-server-js';
+import { Context } from 'hono';
 
 /**
  * The session payload stored during the login process.
@@ -17,7 +17,7 @@ export interface SessionCookieOptions {
   /**
    * The name of the session cookie.
    *
-   * Default: `__a0_session`.
+   * Default: `appSession`.
    */
   name?: string;
   /**
@@ -25,7 +25,7 @@ export interface SessionCookieOptions {
    *
    * Default: `lax`.
    */
-  sameSite?: "strict" | "lax" | "none";
+  sameSite?: 'strict' | 'lax' | 'none';
   /**
    * The secure attribute of the session cookie.
    *
@@ -36,9 +36,12 @@ export interface SessionCookieOptions {
 
 export interface SessionConfiguration {
   /**
-   * The encryption key used to encrypt the session data.
+   * The encryption key(s) used to encrypt the session data.
+   * Supports key rotation: pass an array where the first key encrypts new sessions
+   * and remaining keys can decrypt existing sessions.
+   * Each key must be at least 32 characters.
    */
-  secret: string;
+  secret: string | string[];
 
   /**
    * The store used to persist the session data.
@@ -81,8 +84,5 @@ export abstract class SessionStore {
   abstract delete(identifier: string): Promise<void>;
   abstract set(identifier: string, stateData: StateData): Promise<void>;
   abstract get(identifier: string): Promise<StateData | undefined>;
-  abstract deleteByLogoutToken(
-    claims: LogoutTokenClaims,
-    c?: Context | undefined,
-  ): Promise<void>;
+  abstract deleteByLogoutToken(claims: LogoutTokenClaims, c?: Context | undefined): Promise<void>;
 }

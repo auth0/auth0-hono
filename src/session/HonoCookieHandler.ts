@@ -58,7 +58,11 @@ function capitalize<T extends string>(s: T): Capitalize<T> {
 export class HonoCookieHandler implements CookieHandler<Context> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private static localStore: any = AsyncLocalStorageImpl ? new AsyncLocalStorageImpl() : null;
-  // Cache cookie options per name for deletion (Chrome scheme-bound cookies require matching attrs)
+  // Cache cookie options per name for deletion (Chrome scheme-bound cookies require matching attrs).
+  // This is a singleton instance — persists across requests. Last-write-wins per cookie name.
+  // Safe because each cookie name (__a0_tx, appSession, etc.) always uses the same options
+  // across its lifecycle. If a future feature uses dynamic options per-cookie-name, this
+  // would need to be request-scoped.
   private cookieOptionsCache = new Map<string, CookieOptions>();
 
   static setContext<R>(context: Context, callback: () => R): R {
@@ -101,8 +105,9 @@ export class HonoCookieHandler implements CookieHandler<Context> {
    */
   getCookies(storeOptions?: Context): Record<string, string> {
     const { req } = this.getContext(storeOptions);
-    return Object.fromEntries(
-      (req.header('Cookie') ?? '').split(';').map((cookie) => {
+    const rawHeader = req.header('Cookie') ?? '';
+    const result = Object.fromEntries(
+      rawHeader.split(';').map((cookie) => {
         const [key, ...val] = cookie.trim().split('=');
         const encodedValue = val.join('=');
         let decodedValue: string;
@@ -118,6 +123,7 @@ export class HonoCookieHandler implements CookieHandler<Context> {
         return [key, decodedValue];
       })
     );
+    return result;
   }
 
   setCookie(name: string, value: string, options?: CookieSerializeOptions, storeOptions?: Context): string {
@@ -140,7 +146,8 @@ export class HonoCookieHandler implements CookieHandler<Context> {
   getCookie(name: string, storeOptions?: Context): string | undefined {
     const ctx = this.getContext(storeOptions);
     try {
-      return getCookie(ctx, name);
+      const val = getCookie(ctx, name);
+      return val;
     } catch {
       // Malformed %-encoding in cookie value — treat as absent.
       // Prevents 500 crash from attacker-injected malformed session cookies.

@@ -5,7 +5,7 @@ import { Auth0Error } from '@/errors/Auth0Error.js';
 import { Next, MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { OIDCEnv } from '@/lib/honoEnv.js';
-import { resumeSilentLogin } from './silentLogin.js';
+import { deleteSilentLoginCookie } from './silentLogin.js';
 import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
 import { STATE_STORE_KEY } from '@/lib/constants.js';
 import { Configuration } from '@/config/Configuration.js';
@@ -102,7 +102,7 @@ export const callback = (params: CallbackParams = {}) => {
         try {
           const hookResult = await hook(c, null, session);
           if (hookResult instanceof Response) {
-            await resumeSilentLogin()(c, next);
+            deleteSilentLoginCookie(c);
             return hookResult;
           }
           // If hook returns enriched session (different object), persist it
@@ -132,8 +132,10 @@ export const callback = (params: CallbackParams = {}) => {
         }
       }
 
-      // Resume silent login and redirect
-      await resumeSilentLogin()(c, next);
+      // Delete silent login skip cookie directly — do NOT use resumeSilentLogin()(c, next).
+      // resumeSilentLogin calls next() which dispatches to Hono's 404 in standalone routes,
+      // setting context.finalized=true and causing the redirect below to be discarded.
+      deleteSilentLoginCookie(c);
 
       if (params.redirectAfterLogin === false) {
         return next();

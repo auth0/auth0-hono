@@ -113,9 +113,7 @@ export const ConfigurationSchema = z
       .optional()
       .default(() => globalThis.fetch),
 
-    onCallback: z
-      .custom<Configuration['onCallback']>((v) => typeof v === 'function')
-      .optional(),
+    onCallback: z.custom<Configuration['onCallback']>((v) => typeof v === 'function').optional(),
   })
   .transform((data) => {
     const isSecure = /^https:/i.test(data.baseURL);

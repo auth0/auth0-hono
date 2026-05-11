@@ -2,8 +2,8 @@
 import { Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import { getClient } from '../../src/config';
-import { resumeSilentLogin } from '../../src/middleware';
 import { logout } from '../../src/middleware/logout';
+import { deleteSilentLoginCookie } from '../../src/middleware/silentLogin';
 import { toSafeRedirect } from '../../src/utils/util';
 
 // Mock dependencies
@@ -17,6 +17,7 @@ vi.mock('../../src/utils/util', () => ({
 
 vi.mock('../../src/middleware/silentLogin', () => ({
   resumeSilentLogin: vi.fn(),
+  deleteSilentLoginCookie: vi.fn(),
 }));
 
 describe('logout middleware', () => {
@@ -25,11 +26,8 @@ describe('logout middleware', () => {
   let mockConfiguration: any;
   let mockClient: any;
   const nextFn = vi.fn();
-  const resumeSilentLoginMiddleware = vi.fn();
   beforeEach(() => {
     vi.resetAllMocks();
-
-    (resumeSilentLogin as Mock).mockReturnValue(resumeSilentLoginMiddleware);
     // Mock OIDC session data
     mockOidcSession = {
       id_token: 'mock-id-token',
@@ -102,8 +100,8 @@ describe('logout middleware', () => {
       });
     });
 
-    it('should call resumeSilentLogin middleware', () => {
-      expect(resumeSilentLoginMiddleware).toHaveBeenCalledWith(mockContext, nextFn);
+    it('should delete silent login skip cookie', () => {
+      expect(deleteSilentLoginCookie).toHaveBeenCalledWith(mockContext);
     });
   });
 

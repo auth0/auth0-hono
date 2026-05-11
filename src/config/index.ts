@@ -42,6 +42,12 @@ export const parseConfiguration = (config: InitConfiguration): Configuration => 
   }
 
   // Tier 2: Value equality (ensureClient() — new object from env, no functions)
+  // KNOWN LIMITATION: JSON.stringify drops function fields (debug, fetch, onCallback).
+  // Two configs differing only in function fields would collide here. Safe because
+  // Tier 2 is only hit by ensureClient() which creates config from env(c) — never
+  // contains functions. auth0() middleware always hits Tier 1 (reference equality).
+  // If this changes (e.g., ensureClient gains function support), Tier 2 must use
+  // a hash that accounts for function identity.
   const cacheKey = JSON.stringify(config);
   if (parsedConfigByValue.has(cacheKey)) {
     const cached = parsedConfigByValue.get(cacheKey)!;

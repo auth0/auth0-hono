@@ -2,8 +2,8 @@
 import { Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import { getClient } from '../../src/config';
-import { resumeSilentLogin } from '../../src/middleware';
 import { callback } from '../../src/middleware/callback';
+import { deleteSilentLoginCookie } from '../../src/middleware/silentLogin';
 import { createRouteUrl } from '../../src/utils/util';
 
 // Mock dependencies
@@ -18,6 +18,7 @@ vi.mock('../../src/utils/util', () => ({
 
 vi.mock('../../src/middleware/silentLogin', () => ({
   resumeSilentLogin: vi.fn(),
+  deleteSilentLoginCookie: vi.fn(),
 }));
 
 describe('callback middleware', () => {
@@ -25,12 +26,8 @@ describe('callback middleware', () => {
   let mockClient: any;
   let mockConfiguration: any;
   const nextFn = vi.fn();
-  const resumeSilentLoginMiddleware = vi.fn();
-
   beforeEach(() => {
     vi.resetAllMocks();
-
-    (resumeSilentLogin as Mock).mockReturnValue(resumeSilentLoginMiddleware);
 
     // Create a mock state store
     const mockStateStore = {
@@ -101,8 +98,8 @@ describe('callback middleware', () => {
       );
     });
 
-    it('should call the resume silent login middleware', () => {
-      expect(resumeSilentLoginMiddleware).toHaveBeenCalledWith(mockContext, nextFn);
+    it('should delete the silent login skip cookie', () => {
+      expect(deleteSilentLoginCookie).toHaveBeenCalledWith(mockContext);
     });
 
     it('should redirect to the returnTo URL by default', () => {
@@ -175,9 +172,9 @@ describe('callback middleware', () => {
       mockClient.completeInteractiveLogin.mockRejectedValue(new Error('Authorization code grant failed'));
     });
 
-    it('should NOT call resumeSilentLogin on error path (prevents redirect loop)', async () => {
+    it('should NOT call deleteSilentLoginCookie on error path (prevents redirect loop)', async () => {
       await expect(callback()(mockContext, nextFn)).rejects.toThrow('Authorization code grant failed');
-      expect(resumeSilentLoginMiddleware).not.toHaveBeenCalled();
+      expect(deleteSilentLoginCookie).not.toHaveBeenCalled();
     });
   });
 
@@ -200,8 +197,8 @@ describe('callback middleware', () => {
       }
     });
 
-    it('should NOT call resumeSilentLogin on error path (prevents redirect loop)', () => {
-      expect(resumeSilentLoginMiddleware).not.toHaveBeenCalled();
+    it('should NOT call deleteSilentLoginCookie on error path (prevents redirect loop)', () => {
+      expect(deleteSilentLoginCookie).not.toHaveBeenCalled();
     });
 
     it('should throw the error', () => {

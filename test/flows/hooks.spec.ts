@@ -24,6 +24,7 @@ vi.mock('../../src/helpers/sessionCache', () => ({
 
 vi.mock('../../src/middleware/silentLogin', () => ({
   resumeSilentLogin: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)),
+  deleteSilentLoginCookie: vi.fn(),
 }));
 
 vi.mock('../../src/errors/errorMap', () => ({

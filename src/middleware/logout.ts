@@ -3,7 +3,7 @@ import { OIDCEnv } from '@/lib/honoEnv.js';
 import { toSafeRedirect } from '@/utils/util.js';
 import { mapServerError } from '@/errors/errorMap.js';
 import { createMiddleware } from 'hono/factory';
-import { resumeSilentLogin } from './silentLogin.js';
+import { deleteSilentLoginCookie } from './silentLogin.js';
 import { MiddlewareHandler } from 'hono';
 
 export type LogoutParams = {
@@ -21,7 +21,7 @@ export type LogoutParams = {
  * if idpLogout is enabled in configuration.
  */
 export const logout = (params: LogoutParams = {}) => {
-  return createMiddleware<OIDCEnv>(async function (c, next): Promise<Response> {
+  return createMiddleware<OIDCEnv>(async function (c): Promise<Response> {
     try {
       const { client, configuration } = getClient(c);
       const session = await client.getSession(c);
@@ -36,7 +36,9 @@ export const logout = (params: LogoutParams = {}) => {
 
       const logoutUrl = await client.logout({ returnTo }, c);
 
-      await resumeSilentLogin()(c, next);
+      // Delete silent login skip cookie directly — do NOT use resumeSilentLogin()(c, next).
+      // See callback.ts for full explanation of the next() poisoning bug.
+      deleteSilentLoginCookie(c);
 
       if (!configuration.idpLogout) {
         return c.redirect(returnTo);

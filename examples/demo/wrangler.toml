@@ -1,7 +1,6 @@
 name = "auth0-hono-demo"
 main = "worker.ts"
 compatibility_date = "2024-12-16"
-compatibility_flags = ["nodejs_compat"]
 
 [dev]
 port = 3000

@@ -144,5 +144,9 @@ dist
 # End of https://www.toptal.com/developers/gitignore/api/node
 n
 
+# Examples
+examples/**/pnpm-lock.yaml
+examples/**/.dev.vars
+
 forge/
 .forge/

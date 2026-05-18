@@ -9,7 +9,7 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@auth0/auth0-hono": "file:../../",
+    "@auth0/auth0-hono": "latest",
     "hono": "^4.0.0"
   },
   "devDependencies": {

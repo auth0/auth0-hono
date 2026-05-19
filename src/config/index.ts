@@ -1,8 +1,8 @@
-import { env } from 'hono/adapter';
-import { Context } from 'hono';
 import { Auth0Error } from '@/errors/index.js';
 import { initializeOidcClient } from '@/lib/client.js';
 import { STATE_STORE_KEY } from '@/lib/constants.js';
+import { Context } from 'hono';
+import { env } from 'hono/adapter';
 import { Configuration, InitConfiguration } from './Configuration.js';
 import { ConfigurationSchema } from './Schema.js';
 import { assignFromEnv } from './envConfig.js';
@@ -42,24 +42,24 @@ export const parseConfiguration = (config: InitConfiguration): Configuration => 
   }
 
   // Tier 2: Value equality (ensureClient() — new object from env, no functions)
-  // KNOWN LIMITATION: JSON.stringify drops function fields (debug, fetch, onCallback).
-  // Two configs differing only in function fields would collide here. Safe because
-  // Tier 2 is only hit by ensureClient() which creates config from env(c) — never
-  // contains functions. auth0() middleware always hits Tier 1 (reference equality).
-  // If this changes (e.g., ensureClient gains function support), Tier 2 must use
-  // a hash that accounts for function identity.
-  const cacheKey = JSON.stringify(config);
-  if (parsedConfigByValue.has(cacheKey)) {
-    const cached = parsedConfigByValue.get(cacheKey)!;
-    // Promote to Tier 1 for future hits with same reference
-    parsedConfigByRef.set(config, cached);
-    return cached;
+  // Skip Tier 2 entirely if config contains functions.
+  const hasFunctions = Object.values(config).some((v) => typeof v === 'function');
+  if (!hasFunctions) {
+    const cacheKey = JSON.stringify(config);
+    if (parsedConfigByValue.has(cacheKey)) {
+      const cached = parsedConfigByValue.get(cacheKey)!;
+      // Promote to Tier 1 for future hits with same reference
+      parsedConfigByRef.set(config, cached);
+      return cached;
+    }
   }
 
   // Cache miss — full Zod parse
   const result = ConfigurationSchema.parse(config) as Configuration;
   parsedConfigByRef.set(config, result);
-  parsedConfigByValue.set(cacheKey, result);
+  if (!hasFunctions) {
+    parsedConfigByValue.set(JSON.stringify(config), result);
+  }
   return result;
 };
 

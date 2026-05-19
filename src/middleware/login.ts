@@ -1,10 +1,10 @@
 import { OIDCAuthorizationRequestParams } from '@/config/authRequest.js';
-import { getClient, ensureClient } from '@/config/index.js';
+import { ensureClient, getClient } from '@/config/index.js';
+import { mapServerError } from '@/errors/errorMap.js';
 import { OIDCEnv } from '@/lib/honoEnv.js';
 import { toSafeRedirect } from '@/utils/util.js';
-import { mapServerError } from '@/errors/errorMap.js';
-import { createMiddleware } from 'hono/factory';
 import { MiddlewareHandler } from 'hono';
+import { createMiddleware } from 'hono/factory';
 
 export type LoginParams = {
   /**
@@ -67,6 +67,7 @@ const BLOCKED_FORWARD_PARAMS = new Set([
   'code_challenge_method',
   'state',
   'nonce',
+  'max_age',
 ]);
 
 /**

@@ -1,8 +1,8 @@
+import { Auth0Error } from '@/errors/Auth0Error.js';
 import { CookieHandler, CookieSerializeOptions } from '@auth0/auth0-server-js';
 import { Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { CookieOptions } from 'hono/utils/cookie';
-import { Auth0Error } from '@/errors/Auth0Error.js';
 
 /**
  * Conditional AsyncLocalStorage import — defensive fallback for context resolution.
@@ -115,8 +115,9 @@ export class HonoCookieHandler implements CookieHandler<Context> {
         try {
           decodedValue = decodeURIComponent(encodedValue);
         } catch {
-          // Malformed %-encoding: return raw value as fallback
-          // Prevents request crash on malformed cookies (attacker vector)
+          // Return raw value as fallback — prevents request crash on attacker-injected
+          // malformed cookies. The raw value will fail session decryption downstream
+          // and be treated as an absent session.
           decodedValue = encodedValue;
         }
 

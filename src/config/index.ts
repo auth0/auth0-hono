@@ -42,23 +42,24 @@ export const parseConfiguration = (config: InitConfiguration): Configuration => 
   }
 
   // Tier 2: Value equality (ensureClient() — new object from env, no functions)
-  // Skip Tier 2 entirely if config contains functions.
+  // Check ALL values (not just known function fields like debug/fetch/onCallback)
+  // to be forward-compatible: new function fields added in future won't silently
+  // cause Tier 2 collisions without requiring updates to a named-fields list.
   const hasFunctions = Object.values(config).some((v) => typeof v === 'function');
-  if (!hasFunctions) {
-    const cacheKey = JSON.stringify(config);
-    if (parsedConfigByValue.has(cacheKey)) {
-      const cached = parsedConfigByValue.get(cacheKey)!;
-      // Promote to Tier 1 for future hits with same reference
-      parsedConfigByRef.set(config, cached);
-      return cached;
-    }
+  const cacheKey = !hasFunctions ? JSON.stringify(config) : null;
+
+  if (cacheKey && parsedConfigByValue.has(cacheKey)) {
+    const cached = parsedConfigByValue.get(cacheKey)!;
+    // Promote to Tier 1 for future hits with same reference
+    parsedConfigByRef.set(config, cached);
+    return cached;
   }
 
   // Cache miss — full Zod parse
   const result = ConfigurationSchema.parse(config) as Configuration;
   parsedConfigByRef.set(config, result);
-  if (!hasFunctions) {
-    parsedConfigByValue.set(JSON.stringify(config), result);
+  if (cacheKey) {
+    parsedConfigByValue.set(cacheKey, result);
   }
   return result;
 };

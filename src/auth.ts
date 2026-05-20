@@ -39,9 +39,37 @@ import { Auth0Context, Auth0Organization, Auth0Session, Auth0User } from '@/type
  */
 export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
   // Promise-based init: future-proof against async additions.
-  // KNOWN LIMITATION: Singleton captures env from first request. Subsequent requests
-  // with different env bindings (e.g., multi-tenant Cloudflare Workers) will use
-  // the first request's config.
+  //
+  // Known limitation related to multi tenant deployments:
+  // This middleware uses a lazy singleton pattern: the OIDC client is initialized once
+  // from the first request's environment bindings and reused for all subsequent requests.
+  //
+  // Impact: In multi-tenant Cloudflare Workers deployments where environment bindings
+  // differ per request (e.g., different AUTH0_DOMAIN, AUTH0_CLIENT_ID, or AUTH0_SECRET
+  // per tenant), ALL tenants will use the first tenant's credentials. This causes:
+  //   - Authentication against wrong Auth0 tenant
+  //   - Token validation with wrong signing keys
+  //   - Session encryption with wrong secret
+  //
+  // When this is safe (most deployments):
+  //   - Single-tenant applications (one set of Auth0 credentials)
+  //   - Applications where env bindings are identical across all requests
+  //   - Cloudflare Workers with static wrangler.toml secrets
+  //
+  // When you need per-request configuration (multi-tenant):
+  //   Use standalone route handlers with ensureClient(c) instead of auth0() middleware:
+  //
+  //   ```typescript
+  //   import { handleLogin, handleCallback, handleLogout, ensureClient } from '@auth0/auth0-hono';
+  //
+  //   // Each request reads its own env bindings via ensureClient(c)
+  //   app.get('/auth/login', handleLogin())
+  //   app.get('/auth/callback', handleCallback())
+  //   app.get('/auth/logout', handleLogout())
+  //   ```
+  //
+  //   ensureClient(c) reads env(c) per-request, so each tenant gets its own config.
+  //
   let initPromise: Promise<Auth0ClientBundle & { config: Configuration }> | undefined;
 
   // Middleware to set ALS context (for HonoCookieHandler fallback)

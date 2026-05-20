@@ -1,15 +1,14 @@
-import { getClient, ensureClient } from '@/config/index.js';
-import { createRouteUrl, toSafeRedirect } from '@/utils/util.js';
-import { mapServerError } from '@/errors/errorMap.js';
-import { Auth0Error } from '@/errors/Auth0Error.js';
-import { Next, MiddlewareHandler } from 'hono';
-import { createMiddleware } from 'hono/factory';
-import { OIDCEnv } from '@/lib/honoEnv.js';
-import { deleteSilentLoginCookie } from './silentLogin.js';
-import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
-import { STATE_STORE_KEY } from '@/lib/constants.js';
 import { Configuration } from '@/config/Configuration.js';
-import { Context } from 'hono';
+import { ensureClient, getClient } from '@/config/index.js';
+import { Auth0Error } from '@/errors/Auth0Error.js';
+import { mapServerError } from '@/errors/errorMap.js';
+import { STATE_STORE_KEY } from '@/lib/constants.js';
+import { OIDCEnv } from '@/lib/honoEnv.js';
+import { createRouteUrl, toSafeRedirect } from '@/utils/util.js';
+import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
+import { Context, MiddlewareHandler, Next } from 'hono';
+import { createMiddleware } from 'hono/factory';
+import { deleteSilentLoginCookie } from './silentLogin.js';
 
 /**
  * Get the state store and cookie identifier from context.
@@ -62,10 +61,9 @@ export const callback = (params: CallbackParams = {}) => {
       // but getCookie reads from the request Cookie header (stale on callback request).
       // We intercept stateStore.set() to capture the written StateData in memory.
       //
-      // CONCURRENCY NOTE: The patch window is ~50ms (duration of completeInteractiveLogin).
-      // In serverless (1 request/isolate), no issue. In Node.js with concurrent callbacks,
-      // interleaving is theoretically possible but practically negligible (callback URL is
-      // hit once per login flow, not under concurrent load).
+      // Concurrency note:
+      // This patches a shared singleton stateStore for ~50ms (duration of completeInteractiveLogin).
+      // The patch uses request-scoped `identifier` matching to isolate captures.
       const { stateStore, identifier } = getStateStoreContext(c, configuration);
       let capturedStateData: StateData | null = null;
       const originalSet = stateStore.set;
@@ -120,14 +118,13 @@ export const callback = (params: CallbackParams = {}) => {
               await stateStore.set(identifier, enrichedState, false, c);
             } else {
               // Shouldn't happen: completeInteractiveLogin succeeded but we didn't capture state
-              configuration.debug(
-                'Warning: Hook enrichment discarded — session state not captured during login.'
-              );
+              configuration.debug('Warning: Hook enrichment discarded — session state not captured during login.');
             }
           }
           // void/undefined: use default behavior
         } catch (hookErr) {
-          // Hook threw — log but don't mask the login
+          // Hook errors are intentionally non-fatal on the success path.
+          // Rationale: A successful OAuth exchange must not be masked by downstream hook failures
           configuration.debug('onCallback hook error', { error: hookErr });
         }
       }

@@ -21,7 +21,7 @@ export type LogoutParams = {
  * if idpLogout is enabled in configuration.
  */
 export const logout = (params: LogoutParams = {}) => {
-  return createMiddleware<OIDCEnv>(async function (c, next): Promise<Response> {
+  return createMiddleware<OIDCEnv>(async function (c): Promise<Response> {
     try {
       const { client, configuration } = getClient(c);
       const session = await client.getSession(c);

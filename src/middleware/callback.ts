@@ -4,6 +4,7 @@ import { Auth0Error } from '@/errors/Auth0Error.js';
 import { mapServerError } from '@/errors/errorMap.js';
 import { STATE_STORE_KEY } from '@/lib/constants.js';
 import { OIDCEnv } from '@/lib/honoEnv.js';
+import { clearCapturedState, getCapturedState } from '@/session/captureRegistry.js';
 import { createRouteUrl, toSafeRedirect } from '@/utils/util.js';
 import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
 import { Context, MiddlewareHandler, Next } from 'hono';
@@ -59,32 +60,22 @@ export const callback = (params: CallbackParams = {}) => {
       // Capture the session that completeInteractiveLogin persists.
       // We can't re-read from cookies because setCookie writes to response headers
       // but getCookie reads from the request Cookie header (stale on callback request).
-      // We intercept stateStore.set() to capture the written StateData in memory.
       //
-      // Concurrency note:
-      // This patches a shared singleton stateStore for ~50ms (duration of completeInteractiveLogin).
-      // The patch uses request-scoped `identifier` matching to isolate captures.
+      // Session capture uses a WeakMap-based registry (installed once at init in client.ts)
+      // keyed by the per-request Hono Context. This provides concurrency-safe isolation
+      // without per-request monkey-patching of the shared stateStore singleton.
+      // See: src/session/captureRegistry.ts
       const { stateStore, identifier } = getStateStoreContext(c, configuration);
-      let capturedStateData: StateData | null = null;
-      const originalSet = stateStore.set;
-      stateStore.set = async function (this: StateStore<Context>, id, data, removeIfExists, opts) {
-        if (id === identifier) {
-          capturedStateData = data as StateData;
-        }
-        return originalSet.call(this, id, data, removeIfExists, opts);
-      };
 
-      let appState: { returnTo: string } | undefined;
-      try {
-        // Complete the login flow
-        ({ appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
-          createRouteUrl(c.req.url, baseURL),
-          c
-        ));
-      } finally {
-        // Always restore — even if completeInteractiveLogin throws
-        stateStore.set = originalSet;
-      }
+      // Complete the login flow
+      const { appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
+        createRouteUrl(c.req.url, baseURL),
+        c
+      );
+
+      // Retrieve captured state from the per-request registry slot
+      const capturedStateData = getCapturedState(c) ?? null;
+      clearCapturedState(c);
 
       // Use captured session (strips internal to match SessionData contract)
       if (capturedStateData) {

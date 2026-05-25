@@ -88,6 +88,7 @@ export function createStateStore(config: Configuration, cookieHandler: HonoCooki
 export function initializeOidcClient(config: Configuration): Auth0ClientBundle {
   const cookieHandler = new HonoCookieHandler();
   const stateStore = createStateStore(config, cookieHandler);
+  const stateId = config.session.cookie?.name ?? 'appSession';
 
   const serverClient = new ServerClient<Context>({
     domain: config.domain,
@@ -106,15 +107,14 @@ export function initializeOidcClient(config: Configuration): Auth0ClientBundle {
       cookieHandler
     ),
     stateStore, // Same reference retained below
-    stateIdentifier: config.session.cookie?.name ?? 'appSession',
+    stateIdentifier: stateId,
     customFetch: config.fetch,
   });
 
   // Install one-time capture interceptor for concurrency-safe session capture.
   // This replaces the per-request monkey-patch pattern in callback.ts that was
   // vulnerable to race conditions under concurrent OAuth callbacks.
-  const stateIdentifier = config.session.cookie?.name ?? 'appSession';
-  installCaptureInterceptor(stateStore, stateIdentifier);
+  installCaptureInterceptor(stateStore, stateId);
 
   // RETURN: Bundle with retained state store reference
   return { serverClient, stateStore, cookieHandler };

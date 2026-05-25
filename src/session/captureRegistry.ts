@@ -32,6 +32,9 @@ const captureRegistry = new WeakMap<Context, StateData>();
  */
 const INTERCEPTOR_INSTALLED = Symbol('captureInterceptorInstalled');
 
+/** @internal Type augmentation for Symbol guard on stateStore instance */
+type GuardedStore = StateStore<Context> & { [key: symbol]: boolean };
+
 /**
  * Install a one-time interceptor on the stateStore that captures written
  * StateData into a per-request WeakMap slot.
@@ -43,7 +46,7 @@ const INTERCEPTOR_INSTALLED = Symbol('captureInterceptorInstalled');
  * @internal
  */
 export function installCaptureInterceptor(stateStore: StateStore<Context>, identifier: string): void {
-  if ((stateStore as unknown as Record<symbol, boolean>)[INTERCEPTOR_INSTALLED]) {
+  if ((stateStore as GuardedStore)[INTERCEPTOR_INSTALLED]) {
     return;
   }
 
@@ -60,7 +63,7 @@ export function installCaptureInterceptor(stateStore: StateStore<Context>, ident
     return originalSet(id, data, removeIfExists, opts);
   };
 
-  (stateStore as unknown as Record<symbol, boolean>)[INTERCEPTOR_INSTALLED] = true;
+  (stateStore as GuardedStore)[INTERCEPTOR_INSTALLED] = true;
 }
 
 /**

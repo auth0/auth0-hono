@@ -1,0 +1,22 @@
+{
+  "name": "@auth0/auth0-hono-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env serve-node.ts",
+    "dev:worker": "wrangler dev",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@auth0/auth0-hono": "latest",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "wrangler": "^3.0.0"
+  }
+}

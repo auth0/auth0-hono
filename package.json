@@ -2,6 +2,10 @@
   "name": "@auth0/auth0-hono",
   "version": "2.0.0-beta.0",
   "description": "Auth0 Authentication middleware for Hono",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/auth0/auth0-hono.git"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

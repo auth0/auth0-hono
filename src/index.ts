@@ -7,6 +7,9 @@ export { auth } from '@/auth.js';
 
 // Route handlers (standalone)
 export { handleLogin, handleLogout, handleCallback, handleBackchannelLogout } from '@/middleware/index.js';
+export type { LoginParams } from '@/middleware/login.js';
+export type { CallbackParams } from '@/middleware/callback.js';
+export type { LogoutParams } from '@/middleware/logout.js';
 
 // Protection + Authorization middleware
 export { requiresAuth, requiresOrg, claimEquals, claimIncludes, claimCheck } from '@/middleware/index.js';
@@ -25,6 +28,9 @@ export { getAccessToken } from '@/helpers/getAccessToken.js';
 export type { Auth0TokenSet } from '@/helpers/getAccessToken.js';
 export { getAccessTokenForConnection } from '@/helpers/getAccessTokenForConnection.js';
 export type { GetAccessTokenForConnectionOptions } from '@/helpers/getAccessTokenForConnection.js';
+
+// Configuration types
+export type { PartialConfig as Auth0Config } from '@/config/envConfig.js';
 
 // Utilities
 export { toSafeRedirect } from '@/utils/util.js';

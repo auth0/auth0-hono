@@ -111,33 +111,27 @@ describe('getAccessToken(c)', () => {
       expiresAt: Date.now() + 3600000,
     } as any;
 
-    // Setup: all three calls see the same refresh cache key
-    const refreshCache = new Map();
-    mockContext.get
-      .mockReturnValueOnce(undefined) // First call: REFRESH_CACHE_KEY miss
-      .mockReturnValueOnce(refreshCache) // Second call: REFRESH_CACHE_KEY hit
-      .mockReturnValueOnce(refreshCache) // Third call: REFRESH_CACHE_KEY hit
-      .mockReturnValueOnce(undefined); // Invalidate SESSION_CACHE_KEY after first call
+    // Simulate slow token refresh — forces concurrent calls to share same promise
+    mockClient.getAccessToken.mockImplementation(
+      () => new Promise<TokenSet>((resolve) => setTimeout(() => resolve(mockTokenSet), 50))
+    );
 
-    // Store the promise in the cache manually to simulate concurrent behavior
-    const cacheKey = '__default__';
-    const tokenPromise = Promise.resolve(mockTokenSet);
-    refreshCache.set(cacheKey, tokenPromise);
-    mockClient.getAccessToken.mockResolvedValueOnce(mockTokenSet);
+    // Simulate real context storage: get/set share the same backing store
+    const contextStore = new Map<string, any>();
+    mockContext.get.mockImplementation((key: string) => contextStore.get(key));
+    mockContext.set.mockImplementation((key: string, value: any) => contextStore.set(key, value));
 
-    // Call 1: Creates promise in cache
-    const result1 = getAccessToken(mockContext);
-
-    // Call 2 & 3: Would await same promise (we'll just verify they get same result)
-    const result2 = getAccessToken(mockContext);
-    const result3 = getAccessToken(mockContext);
-
-    const [res1, res2, res3] = await Promise.all([result1, result2, result3]);
+    // Fire 3 concurrent calls — first creates Map + promise, second/third reuse it
+    const [res1, res2, res3] = await Promise.all([
+      getAccessToken(mockContext),
+      getAccessToken(mockContext),
+      getAccessToken(mockContext),
+    ]);
 
     expect(res1).toEqual(mockTokenSet);
     expect(res2).toEqual(mockTokenSet);
     expect(res3).toEqual(mockTokenSet);
-    // Verify client called only once
+    // Critical: client.getAccessToken called ONCE despite 3 concurrent calls
     expect(mockClient.getAccessToken).toHaveBeenCalledTimes(1);
   });
 
@@ -228,11 +222,25 @@ describe('getAccessToken(c)', () => {
 
   // REQ-B5: Single cache key — audience fixed at client init
   describe('cache key', () => {
-    it('should use fixed cache key for all calls (audience from client config)', () => {
-      // server-js determines audience from authorizationParams.audience at init
-      // No per-call audience override — single cache key suffices
-      const cacheKey = '__default__';
-      expect(cacheKey).toBe('__default__');
+    it('should store token promise under single fixed key regardless of call count', async () => {
+      const mockTokenSet: TokenSet = {
+        accessToken: 'cached_token',
+        expiresAt: Date.now() + 3600000,
+      } as any;
+
+      mockContext.get.mockReturnValueOnce(undefined); // REFRESH_CACHE_KEY miss
+      mockClient.getAccessToken.mockResolvedValueOnce(mockTokenSet);
+      mockContext.get.mockReturnValueOnce(undefined); // SESSION_CACHE_KEY miss
+
+      await getAccessToken(mockContext);
+
+      // Verify the cache was set with a Map containing exactly one key
+      const setCalls = mockContext.set.mock.calls.filter((call: any[]) => call[0] === REFRESH_CACHE_KEY);
+      expect(setCalls.length).toBeGreaterThan(0);
+      const storedMap = setCalls[0][1] as Map<string, any>;
+      expect(storedMap).toBeInstanceOf(Map);
+      expect(storedMap.size).toBe(1);
+      expect(storedMap.has('__default__')).toBe(true);
     });
   });
 

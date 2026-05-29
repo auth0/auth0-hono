@@ -25,6 +25,8 @@ import { Context } from 'hono';
  * @internal
  */
 const captureRegistry = new WeakMap<Context, StateData>();
+/** Tracks contexts that have already captured — prevents re-entry overwrite after clearCapturedState. */
+const capturedOnce = new WeakSet<Context>();
 
 /**
  * Symbol guard to prevent double-installation of the interceptor.
@@ -57,10 +59,13 @@ export function installCaptureInterceptor(stateStore: StateStore<Context>, ident
     removeIfExists?: boolean,
     opts?: Context
   ): Promise<void> {
-    if (id === identifier && opts) {
+    await originalSet(id, data, removeIfExists, opts);
+    // Only capture FIRST write per request — prevents onCallback hook re-entry
+    // from overwriting original OAuth session with enriched data.
+    if (id === identifier && opts && !capturedOnce.has(opts)) {
       captureRegistry.set(opts, data);
+      capturedOnce.add(opts);
     }
-    return originalSet(id, data, removeIfExists, opts);
   };
 
   (stateStore as GuardedStore)[INTERCEPTOR_INSTALLED] = true;

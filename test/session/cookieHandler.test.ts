@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Context } from 'hono';
-import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
-import { HonoCookieHandler } from '../../src/session/HonoCookieHandler';
 import { getCookie, setCookie } from 'hono/cookie';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HonoCookieHandler } from '../../src/session/HonoCookieHandler';
 
 // Mock hono/cookie
 vi.mock('hono/cookie', () => ({
@@ -145,7 +145,7 @@ describe('HonoCookieHandler', () => {
     });
 
     // REQ-A1: Handle malformed %-encoding in cookie values (crash prevention)
-    it('should handle malformed %-encoding in cookie values without crashing', () => {
+    it('should return raw value for malformed %-encoding (not crash)', () => {
       mockContext.req.header = vi.fn((headerName: string) => {
         if (headerName === 'Cookie') {
           return 'malformed=%XX%ZZ; valid=ok';
@@ -153,12 +153,11 @@ describe('HonoCookieHandler', () => {
         return undefined;
       });
 
-      // Should not crash; should return raw value or empty
       const result = cookieHandler.getCookies(mockContext as any);
 
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('object');
-      // May contain raw value or skip the malformed cookie
+      // Malformed cookie returns raw undecoded value (fallback behavior)
+      expect(result.malformed).toBe('%XX%ZZ');
+      // Valid cookies still decode correctly
       expect(result.valid).toBe('ok');
     });
 
@@ -349,7 +348,93 @@ describe('HonoCookieHandler', () => {
     });
   });
 
-  // REQ-C1: Throw Auth0Error (not generic Error) when ALS unavailable
+  // AUDIT(VULN-2): Verify httpOnly survives full cookie lifecycle (set → delete).
+  // The claim: server-js always passes httpOnly:true. We can't test upstream here,
+  // but we CAN prove that if httpOnly is passed (which it always is), our handler
+  // never drops it — neither in setCookie, cached options, nor deleteCookie.
+  describe('httpOnly preservation through full cookie lifecycle', () => {
+    it('should retain httpOnly through set → delete cycle (explicit options path)', () => {
+      const ctx = mockContext as any;
+
+      // Step 1: setCookie with httpOnly (simulates server-js StatelessStateStore)
+      cookieHandler.setCookie('appSession.0', 'encrypted', {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+        maxAge: 86400,
+      }, ctx);
+
+      vi.mocked(setCookie).mockClear();
+
+      // Step 2: deleteCookie with explicit options (simulates StatelessStateStore.delete())
+      cookieHandler.deleteCookie('appSession.0', ctx, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+      });
+
+      // Verify deletion includes httpOnly — Chrome 118+ requires matching attrs
+      expect(setCookie).toHaveBeenCalledWith(
+        ctx,
+        'appSession.0',
+        '',
+        expect.objectContaining({
+          httpOnly: true,
+          sameSite: 'Lax',
+          secure: true,
+          path: '/',
+          maxAge: 0,
+        })
+      );
+    });
+
+    it('should retain cookie attributes through set → cache → delete cycle (cached path)', () => {
+      const ctx = mockContext as any;
+
+      // Step 1: setCookie populates cookieOptionsCache
+      cookieHandler.setCookie('__a0_tx', 'encrypted_tx', {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 3600,
+      }, ctx);
+
+      vi.mocked(setCookie).mockClear();
+
+      // Step 2: deleteCookie WITHOUT explicit options (CookieTransactionStore.delete() path)
+      // Must fall back to cached options from step 1
+      cookieHandler.deleteCookie('__a0_tx', ctx);
+
+      // Verify deletion uses cached sameSite (proves cache works for deletion)
+      expect(setCookie).toHaveBeenCalledWith(
+        ctx,
+        '__a0_tx',
+        '',
+        expect.objectContaining({
+          sameSite: 'Lax',
+          path: '/',
+          maxAge: 0,
+        })
+      );
+    });
+
+    it('should NOT inject httpOnly if upstream never sent it', () => {
+      const ctx = mockContext as any;
+
+      // Options without httpOnly — handler must not fabricate it
+      cookieHandler.deleteCookie('nonAuthCookie', ctx, {
+        path: '/',
+        sameSite: 'lax',
+      });
+
+      const callArgs = vi.mocked(setCookie).mock.calls[0]?.[3] as any;
+      expect(callArgs.httpOnly).toBeUndefined();
+    });
+  });
+
+  // Throw Auth0Error (not generic Error) when ALS unavailable
   describe('error handling when ALS context unavailable', () => {
     it('should throw Auth0Error (not generic Error) when no context available', () => {
       // When called without context and ALS unavailable

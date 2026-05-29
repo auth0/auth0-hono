@@ -65,13 +65,21 @@ describe('WeakMap Capture Registry — Concurrency Safety', () => {
     });
 
     it('should NOT cross-contaminate under interleaved async operations', async () => {
-      const stateStore = createMockStateStore();
+      // Use a real async stateStore.set with random delays to force genuine interleaving
+      const originalSetFn = vi.fn().mockImplementation(
+        () => new Promise<void>((resolve) => setTimeout(resolve, Math.random() * 10))
+      );
+      const stateStore: StateStore<any> = {
+        get: vi.fn(),
+        set: originalSetFn,
+        delete: vi.fn(),
+      };
       installCaptureInterceptor(stateStore, 'appSession');
 
       const contexts = Array.from({ length: 10 }, (_, i) => createMockContext(`req-${i}`));
       const states = Array.from({ length: 10 }, (_, i) => createStateData(`user_${i}`));
 
-      // Simulate 10 concurrent callbacks in arbitrary order
+      // Fire 10 concurrent callbacks — random delays force real interleaving
       const promises = contexts.map((ctx, i) =>
         stateStore.set('appSession', states[i], true, ctx)
       );
@@ -83,6 +91,9 @@ describe('WeakMap Capture Registry — Concurrency Safety', () => {
         expect(captured).not.toBeNull();
         expect(captured!.user.sub).toBe(`user_${i}`);
       });
+
+      // All 10 original set calls completed
+      expect(originalSetFn).toHaveBeenCalledTimes(10);
     });
 
     it('should not capture when identifier does not match', async () => {
@@ -188,8 +199,8 @@ describe('WeakMap Capture Registry — Concurrency Safety', () => {
       // Should propagate original error
       await expect(stateStore.set('appSession', stateData, true, ctx)).rejects.toThrow('store write failed');
 
-      // State is still captured (capture happens before delegation)
-      expect(getCapturedState(ctx)).toEqual(stateData);
+      // State is NOT captured when originalSet throws — capture executes after delegation
+      expect(getCapturedState(ctx)).toBeUndefined();
     });
   });
 

@@ -20,6 +20,14 @@ vi.mock('../../src/middleware/silentLogin', () => ({
   deleteSilentLoginCookie: vi.fn(),
 }));
 
+vi.mock('../../src/helpers/sessionCache', () => ({
+  invalidateSessionCache: vi.fn(),
+}));
+
+vi.mock('hono/cookie', () => ({
+  deleteCookie: vi.fn(),
+}));
+
 describe('logout middleware', () => {
   let mockContext: Context;
   let mockOidcSession: any;

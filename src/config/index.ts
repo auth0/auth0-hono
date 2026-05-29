@@ -33,6 +33,8 @@ import { assignFromEnv } from './envConfig.js';
  * No customer-facing key needed.
  */
 const parsedConfigByRef = new WeakMap<object, Configuration>();
+// Tier-2 only activates for ensureClient() configs which never contain
+// functions (env-only). No collision between function-bearing and function-free configs.
 const parsedConfigByValue = new Map<string, Configuration>();
 
 export const parseConfiguration = (config: InitConfiguration): Configuration => {

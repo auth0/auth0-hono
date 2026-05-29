@@ -129,9 +129,11 @@ export const callback = (params: CallbackParams = {}) => {
         return next();
       }
 
+      // appState is encrypted in transaction cookie (server-js),
+      // but validate returnTo anyway to eliminate open redirect class entirely.
       const finalURL =
         (params.redirectAfterLogin ? toSafeRedirect(params.redirectAfterLogin, baseURL) : undefined) ??
-        appState?.returnTo ??
+        (appState?.returnTo ? toSafeRedirect(appState.returnTo, baseURL) : undefined) ??
         baseURL;
 
       return c.redirect(finalURL);

@@ -82,6 +82,7 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
     async (c, next: Next): Promise<Response | void> => {
       try {
         // === LAZY SINGLETON INITIALIZATION ===
+        // Not a race — JS event loop is single-threaded; assignment is atomic.
         if (!initPromise) {
           initPromise = Promise.resolve().then(() => {
             // Get runtime environment (no process.env!)

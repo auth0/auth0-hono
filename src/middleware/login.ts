@@ -125,6 +125,11 @@ export const login = (params: LoginParams = {}) => {
           if (value) {
             // Normalize to string: if array, use first value (standard behavior)
             const normalizedValue = Array.isArray(value) ? value[0] : value;
+            // Reject values containing CR/LF/NUL to prevent HTTP Response Splitting.
+            // Ref: https://owasp.org/www-community/attacks/HTTP_Response_Splitting
+            if (/[\r\n\0]/.test(normalizedValue)) {
+              continue;
+            }
             paramsFromQuery[param] = normalizedValue;
           }
         }

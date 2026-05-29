@@ -27,10 +27,12 @@ jobs:
         run: |
           VERSION=$(head -1 .version)
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          if [[ "$VERSION" == *"beta"* || "$VERSION" == *"alpha"* ]]; then
+          if [[ "$VERSION" == *"beta"* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            [[ "$VERSION" == *"beta"* ]] && echo "tag=beta" >> "$GITHUB_OUTPUT"
-            [[ "$VERSION" == *"alpha"* ]] && echo "tag=alpha" >> "$GITHUB_OUTPUT"
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          elif [[ "$VERSION" == *"alpha"* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "tag=alpha" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "tag=latest" >> "$GITHUB_OUTPUT"

@@ -182,7 +182,7 @@ The script prints to your terminal:
 ## Deploying to Cloudflare Workers
 
 ```bash
-# Set secrets
+# Set secrets one at a time
 wrangler secret put AUTH0_DOMAIN
 wrangler secret put AUTH0_CLIENT_ID
 wrangler secret put AUTH0_CLIENT_SECRET
@@ -192,5 +192,13 @@ wrangler secret put AUTH0_SESSION_ENCRYPTION_KEY
 # Deploy
 wrangler deploy
 ```
+
+Or upload all secrets in one step from your env file during deploy:
+
+```bash
+wrangler deploy --secrets-file .env
+```
+
+`--secrets-file` accepts a `.env` (`KEY=VALUE`) or JSON file — the same formats as `wrangler secret bulk`. Do not commit this file.
 
 Update your Auth0 application's Allowed Callback and Logout URLs to match your deployed Worker URL.

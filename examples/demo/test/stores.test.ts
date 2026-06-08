@@ -9,7 +9,7 @@ describe('InMemorySessionStore', () => {
     store = new InMemorySessionStore();
   });
 
-  // ST-1: get/set roundtrip
+  // get/set roundtrip
   it('should store and retrieve session data (get/set roundtrip)', async () => {
     const sessionId = 'sess123';
     const stateData: StateData = {
@@ -26,7 +26,7 @@ describe('InMemorySessionStore', () => {
     expect(retrieved).toEqual(stateData);
   });
 
-  // ST-2: sid indexing with data.internal.sid (regression guard)
+  // sid indexing with data.internal.sid (regression guard)
   it('should index sessions by data.internal.sid for BCLO lookups', async () => {
     const sessionId = 'sess456';
     const internalSid = 'auth0|sid_abc123';
@@ -48,13 +48,13 @@ describe('InMemorySessionStore', () => {
     expect(retrieved).toBeUndefined();
   });
 
-  // ST-3: get non-existent session
+  // get non-existent session
   it('should return undefined for non-existent session', async () => {
     const retrieved = await store.get('does-not-exist');
     expect(retrieved).toBeUndefined();
   });
 
-  // ST-4: deleteByLogoutToken with sid match
+  // deleteByLogoutToken with sid match
   it('should delete session by logout token with sid claim', async () => {
     const sessionId = 'sess_x';
     const sidClaim = 'auth0|x';
@@ -73,7 +73,7 @@ describe('InMemorySessionStore', () => {
     expect(retrieved).toBeUndefined();
   });
 
-  // ST-5: deleteByLogoutToken with sid not found (graceful no-op)
+  // deleteByLogoutToken with sid not found (graceful no-op)
   it('should gracefully handle deleteByLogoutToken with unknown sid (no-op)', async () => {
     // Set a session first
     const sessionId = 'sess_known';
@@ -95,7 +95,7 @@ describe('InMemorySessionStore', () => {
     expect(retrieved).toEqual(stateData);
   });
 
-  // ST-6: deleteByLogoutToken with sub fallback
+  // deleteByLogoutToken with sub fallback
   it('should delete session by logout token with sub claim (fallback)', async () => {
     const sessionId1 = 'sess_user1';
     const sessionId2 = 'sess_user2';
@@ -132,7 +132,7 @@ describe('InMemorySessionStore', () => {
     expect(retrieved2).toEqual(stateData2);
   });
 
-  // ST-7: delete cleans sid index
+  // delete cleans sid index
   it('should clean sid index when deleting session by ID', async () => {
     const sessionId = 'sess_to_delete';
     const sidClaim = 'auth0|sid_to_clean';
@@ -157,7 +157,7 @@ describe('InMemorySessionStore', () => {
     await expect(store.deleteByLogoutToken({ sid: sidClaim })).resolves.toBeUndefined();
   });
 
-  // ST-8: Missing internal/sid handled gracefully
+  // Missing internal/sid handled gracefully
   it('should handle missing internal.sid without throwing', async () => {
     const sessionId = 'sess_no_sid';
     const stateData: StateData = {

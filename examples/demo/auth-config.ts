@@ -25,9 +25,12 @@ function decodeBase64PemKey(keyBase64: string): string {
   if (typeof Buffer !== 'undefined') {
     return Buffer.from(keyBase64, 'base64').toString('utf-8');
   }
-  // Workers environment: use atob + decodeURIComponent(escape(...))
-  // atob produces a latin1 string; escape + decodeURIComponent converts to UTF-8
-  return decodeURIComponent(escape(atob(keyBase64)));
+  // Workers environment: atob produces a latin1 (binary) string.
+  // Map each char code to a byte, then decode as UTF-8 via TextDecoder
+  // (escape/unescape are deprecated and must not be used).
+  const binary = atob(keyBase64);
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 /**
@@ -71,7 +74,7 @@ export function createAuth0Config(runtimeEnv: Record<string, any>) {
   // If both clientSecret and key are present, ensure clientSecret is omitted or
   // clientAuthMethod is explicitly set to 'private_key_jwt' to avoid ambiguity.
   //
-  // Note (OQ-2): Preferred approach is to pass PEM string directly to clientAssertionSigningKey.
+  // Note: Preferred approach is to pass PEM string directly to clientAssertionSigningKey.
   // server-js accepts both string and CryptoKey. If Workers runtime rejects PEM string,
   // convert to CryptoKey via Web Crypto API importKey('pkcs8', ...).
   const signingKeyB64 = runtimeEnv.AUTH0_CLIENT_ASSERTION_SIGNING_KEY || '';
@@ -103,6 +106,16 @@ export function createAuth0Config(runtimeEnv: Record<string, any>) {
   // This demo provides InMemorySessionStore (Map-based) for both Node.js and local
   // Cloudflare Workers development. For production Workers, replace with a KV-backed
   // store (skeleton provided in stores.ts comments).
+  //
+  // InMemorySessionStore is NOT production-safe: it loses sessions on restart and
+  // is not shared across instances/isolates. Warn loudly if this looks like prod.
+  if (!baseUrl.includes('localhost') && !baseUrl.includes('127.0.0.1')) {
+    console.warn(
+      '[auth0-demo] InMemorySessionStore is in use with a non-localhost APP_BASE_URL. ' +
+        'This store is demo-only — replace it with a KV/Redis/DB-backed store for production ' +
+        '(see KVSessionStore skeleton in stores.ts).'
+    );
+  }
   const store = new InMemorySessionStore();
 
   // Build config
@@ -143,6 +156,12 @@ export function createAuth0Config(runtimeEnv: Record<string, any>) {
  * - serve-node.ts and worker.ts remain zero-edit
  * - env(c) available on both runtimes at request time
  * - Middleware is cached after first request (singleton pattern)
+ *
+ * Concurrency: the check + assignment below are fully synchronous (no await
+ * between them), so within a single JS isolate they cannot interleave — no
+ * race. Each Workers isolate keeps its own module state. The cache captures
+ * the FIRST request's env; this is fine here because env is stable across a
+ * deployment. If env can vary per request, key the cache by env instead.
  */
 let configured: MiddlewareHandler | undefined;
 

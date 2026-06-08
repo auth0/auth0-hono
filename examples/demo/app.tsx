@@ -21,6 +21,9 @@ import { ACTIVITY_DATA, TEAM_DATA, STATS } from './data.js';
 import { eventToast, SDK, type ToastItem } from './toasts.js';
 import { auth0Lazy } from './auth-config.js';
 
+/** Runtime env vars this demo reads at request time (Node + Workers). */
+type DemoEnv = { AUTH0_PUSHED_AUTHORIZATION_REQUESTS?: string };
+
 
 // app setup
 const app = new Hono<OIDCEnv>();
@@ -43,7 +46,7 @@ app.get('/', (c) => {
   if (user) toasts.push(SDK.userClaims);
 
   // Add PAR toast if enabled
-  const runtimeEnv = env(c) as any;
+  const runtimeEnv = env<DemoEnv>(c);
   if (runtimeEnv.AUTH0_PUSHED_AUTHORIZATION_REQUESTS === 'true') {
     toasts.push(SDK.par);
   }
@@ -101,7 +104,7 @@ app.get('/dashboard', requiresAuth(), async (c) => {
   if (evt) toasts.unshift(evt);
 
   // Add PAR toast if enabled
-  const runtimeEnv = env(c) as any;
+  const runtimeEnv = env<DemoEnv>(c);
   if (runtimeEnv.AUTH0_PUSHED_AUTHORIZATION_REQUESTS === 'true') {
     toasts.push(SDK.par);
   }

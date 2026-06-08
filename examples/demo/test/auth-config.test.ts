@@ -19,7 +19,7 @@ describe('createAuth0Config', () => {
     validPrivateKeyBase64 = Buffer.from(validPrivatePemKey, 'utf-8').toString('base64');
   });
 
-  // CF-1: Base config required fields
+  // Base config required fields
   it('should assemble base configuration with required fields', () => {
     const env = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -38,7 +38,7 @@ describe('createAuth0Config', () => {
     expect(config.session?.secret).toBe('key32chars_key32chars_key32chars_');
   });
 
-  // CF-2: PAR flag true
+  // PAR flag true
   it('should enable PAR when AUTH0_PUSHED_AUTHORIZATION_REQUESTS=true', () => {
     const env = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -53,7 +53,7 @@ describe('createAuth0Config', () => {
     expect(config.pushedAuthorizationRequests).toBe(true);
   });
 
-  // CF-3: PAR flag false/absent
+  // PAR flag false/absent
   it('should disable PAR when AUTH0_PUSHED_AUTHORIZATION_REQUESTS=false or absent', () => {
     const envFalse = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -77,7 +77,7 @@ describe('createAuth0Config', () => {
     expect(configAbsent.pushedAuthorizationRequests).toBe(false);
   });
 
-  // CF-4: JWT-CA key present (base64 decode + validation)
+  // JWT-CA key present (base64 decode + validation)
   it('should decode base64 signing key and validate PEM format', () => {
     const env = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -94,7 +94,7 @@ describe('createAuth0Config', () => {
     expect(config.clientAssertionSigningAlg).toBe('RS256'); // Default
   });
 
-  // CF-5: JWT-CA key absent; clientSecret present
+  // JWT-CA key absent; clientSecret present
   it('should use clientSecret when signing key is absent', () => {
     const env = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -110,7 +110,7 @@ describe('createAuth0Config', () => {
     expect(config.clientSecret).toBe('mysecret');
   });
 
-  // CF-6: Bad base64 in signing key
+  // Bad base64 in signing key
   it('should throw helpful error on invalid base64 in signing key', () => {
     const env = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -123,7 +123,7 @@ describe('createAuth0Config', () => {
     expect(() => createAuth0Config(env)).toThrow(/Failed to decode AUTH0_CLIENT_ASSERTION_SIGNING_KEY/);
   });
 
-  // CF-7: Signing alg default & override
+  // Signing alg default & override
   it('should respect signing algorithm override and default to RS256', () => {
     const envDefault = {
       AUTH0_DOMAIN: 'tenant.auth0.com',
@@ -149,7 +149,7 @@ describe('createAuth0Config', () => {
     expect(configOverride.clientAssertionSigningAlg).toBe('RS384');
   });
 
-  // CF-8: Session store always wired
+  // Session store always wired
   it('should always wire InMemorySessionStore to config.session.store', () => {
     const env = {
       AUTH0_DOMAIN: 'tenant.auth0.com',

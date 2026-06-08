@@ -26,6 +26,7 @@ export const SDK = {
   userClaims: { text: 'c.var.auth0.user', detail: 'User claims read from session', variant: 'info' } as ToastItem,
   userPicture: { text: 'user.picture', detail: 'Avatar loaded from OIDC claims', variant: 'info' } as ToastItem,
   emailVerified: { text: 'user.email_verified', detail: 'Verification status from identity provider', variant: 'info' } as ToastItem,
+  par: { text: 'Pushed Authorization Request', detail: 'Authorization request pushed to Auth0 (PAR) before redirect', variant: 'info' } as ToastItem,
   getAccessToken: (ok: boolean): ToastItem => ok
     ? { text: 'getAccessToken()', detail: 'Access token valid', variant: 'success' }
     : { text: 'getAccessToken()', detail: 'Token unavailable', variant: 'error' },

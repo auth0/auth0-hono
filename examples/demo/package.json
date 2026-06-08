@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env serve-node.ts",
     "dev:worker": "wrangler dev",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "gen-keypair": "bash scripts/generate-keypair.sh"
   },
   "dependencies": {
-    "@auth0/auth0-hono": "latest",
+    "@auth0/auth0-hono": "beta",
     "hono": "^4.0.0"
   },
   "devDependencies": {
@@ -17,6 +19,7 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
+    "vitest": "^2.0.0",
     "wrangler": "^3.0.0"
   }
 }

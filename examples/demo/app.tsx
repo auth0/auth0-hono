@@ -4,8 +4,8 @@
 import { Hono } from 'hono';
 import { jsx } from 'hono/jsx';
 import { jsxRenderer } from 'hono/jsx-renderer';
+import { env } from 'hono/adapter';
 import {
-  auth0,
   requiresAuth,
   getSession,
   getAccessToken,
@@ -19,6 +19,7 @@ import {
 } from './components.js';
 import { ACTIVITY_DATA, TEAM_DATA, STATS } from './data.js';
 import { eventToast, SDK, type ToastItem } from './toasts.js';
+import { auth0Lazy } from './auth-config.js';
 
 
 // app setup
@@ -26,13 +27,8 @@ const app = new Hono<OIDCEnv>();
 app.use('*', jsxRenderer());
 
 
-// use auth0 middleware
-app.use('*', auth0({
-  authRequired: false,
-  onCallback: (c, error) => {
-    if (!error) return c.redirect('/dashboard?t=login_success');
-  },
-}));
+// use auth0 middleware (lazy-loaded with environment-driven feature toggles)
+app.use('*', auth0Lazy);
 
 // ============================================================================
 // Routes
@@ -45,6 +41,12 @@ app.get('/', (c) => {
   const evt = eventToast(c.req.url);
   if (evt) toasts.unshift(evt);
   if (user) toasts.push(SDK.userClaims);
+
+  // Add PAR toast if enabled
+  const runtimeEnv = env(c) as any;
+  if (runtimeEnv.AUTH0_PUSHED_AUTHORIZATION_REQUESTS === 'true') {
+    toasts.push(SDK.par);
+  }
 
   return c.render(
     <AppLayout user={user} toasts={toasts}>
@@ -97,6 +99,12 @@ app.get('/dashboard', requiresAuth(), async (c) => {
   const toasts: ToastItem[] = [SDK.requiresAuth, SDK.userClaims, SDK.getSession];
   const evt = eventToast(c.req.url);
   if (evt) toasts.unshift(evt);
+
+  // Add PAR toast if enabled
+  const runtimeEnv = env(c) as any;
+  if (runtimeEnv.AUTH0_PUSHED_AUTHORIZATION_REQUESTS === 'true') {
+    toasts.push(SDK.par);
+  }
 
   return c.render(
     <AppLayout user={user} toasts={toasts} activePath="/dashboard">

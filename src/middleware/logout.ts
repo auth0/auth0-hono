@@ -1,10 +1,12 @@
-import { getClient, ensureClient } from '@/config/index.js';
+import { ensureClient, getClient } from '@/config/index.js';
+import { mapServerError } from '@/errors/errorMap.js';
+import { invalidateSessionCache } from '@/helpers/sessionCache.js';
 import { OIDCEnv } from '@/lib/honoEnv.js';
 import { toSafeRedirect } from '@/utils/util.js';
-import { mapServerError } from '@/errors/errorMap.js';
+import { MiddlewareHandler } from 'hono';
+import { deleteCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 import { deleteSilentLoginCookie } from './silentLogin.js';
-import { MiddlewareHandler } from 'hono';
 
 export type LogoutParams = {
   /**
@@ -35,6 +37,12 @@ export const logout = (params: LogoutParams = {}) => {
       }
 
       const logoutUrl = await client.logout({ returnTo }, c);
+
+      // Invalidate session cache — prevent stale reads in same request lifecycle
+      invalidateSessionCache(c);
+
+      // Delete stale transaction cookie
+      deleteCookie(c, '__a0_tx', { path: '/', sameSite: 'Lax', httpOnly: true });
 
       // Delete silent login skip cookie directly — do NOT use resumeSilentLogin()(c, next).
       // See callback.ts for full explanation of the next() poisoning bug.

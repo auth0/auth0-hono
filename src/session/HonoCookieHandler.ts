@@ -1,8 +1,8 @@
+import { Auth0Error } from '@/errors/Auth0Error.js';
 import { CookieHandler, CookieSerializeOptions } from '@auth0/auth0-server-js';
 import { Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { CookieOptions } from 'hono/utils/cookie';
-import { Auth0Error } from '@/errors/Auth0Error.js';
 
 /**
  * Conditional AsyncLocalStorage import — defensive fallback for context resolution.
@@ -28,17 +28,6 @@ import { Auth0Error } from '@/errors/Auth0Error.js';
  *   - Ref: https://github.com/webpack/webpack/pull/18076
  *   - Ref: https://developers.cloudflare.com/workers/runtime-apis/nodejs/
  *
- * WHY NOT A POLYFILL:
- * A try/finally polyfill breaks under concurrent requests (Workers share isolate;
- * Request A overwrites Request B's stored context). Real ALS uses V8 async context
- * tracking across promise chains. A correct polyfill (zone.js) is 10KB+. Since ALS
- * is defensive-only, a clear error on the rare edge case beats a subtly wrong polyfill.
- *
- * PRIOR ART:
- * No major library uses this exact pattern. Hono avoids ALS entirely (explicit context
- * passing). nextjs-auth0 uses @edge-runtime/cookies without ALS. OpenTelemetry uses
- * pluggable managers with static import (fails on Workers). Our case is unique: we
- * follow Hono's explicit pattern (storeOptions) but retain ALS as forward-compat guard.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let AsyncLocalStorageImpl: (new () => any) | null = null;
@@ -58,11 +47,8 @@ function capitalize<T extends string>(s: T): Capitalize<T> {
 export class HonoCookieHandler implements CookieHandler<Context> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private static localStore: any = AsyncLocalStorageImpl ? new AsyncLocalStorageImpl() : null;
-  // Cache cookie options per name for deletion (Chrome scheme-bound cookies require matching attrs).
-  // This is a singleton instance — persists across requests. Last-write-wins per cookie name.
-  // Safe because each cookie name (__a0_tx, appSession, etc.) always uses the same options
-  // across its lifecycle. If a future feature uses dynamic options per-cookie-name, this
-  // would need to be request-scoped.
+  // Singleton cache is safe — cookie names are static per lifecycle.
+  // Multi-tenant deployments use ensureClient() which creates separate handler instances.
   private cookieOptionsCache = new Map<string, CookieOptions>();
 
   static setContext<R>(context: Context, callback: () => R): R {
@@ -115,8 +101,9 @@ export class HonoCookieHandler implements CookieHandler<Context> {
         try {
           decodedValue = decodeURIComponent(encodedValue);
         } catch {
-          // Malformed %-encoding: return raw value as fallback
-          // Prevents request crash on malformed cookies (attacker vector)
+          // Return raw value as fallback — prevents request crash on attacker-injected
+          // malformed cookies. The raw value will fail session decryption downstream
+          // and be treated as an absent session.
           decodedValue = encodedValue;
         }
 
@@ -126,6 +113,9 @@ export class HonoCookieHandler implements CookieHandler<Context> {
     return result;
   }
 
+  // httpOnly enforcement is handled by server-js — all store implementations
+  // always pass httpOnly:true in cookie options.
+  // Ref: https://github.com/auth0/auth0-auth-js/blob/e1af6b311d83/packages/auth0-server-js/src/store/stateless-state-store.ts#L82
   setCookie(name: string, value: string, options?: CookieSerializeOptions, storeOptions?: Context): string {
     const cookieOptions: CookieOptions | undefined = options
       ? {
@@ -155,24 +145,34 @@ export class HonoCookieHandler implements CookieHandler<Context> {
     }
   }
 
-  deleteCookie(name: string, storeOptions?: Context): void {
+  deleteCookie(name: string, storeOptions?: Context, options?: CookieSerializeOptions): void {
     const ctx = this.getContext(storeOptions);
-    // IMPORTANT: Replay stored attributes on deletion.
     // Chrome 118+ uses scheme-bound cookies — deletion must match creation attributes
     // (sameSite, secure, path, domain) exactly, otherwise cookie persists.
-    // Same issue was hit in nextjs-auth0.
-    const storedOptions = this.cookieOptionsCache.get(name);
-    const cookieOptions: CookieOptions = {
-      path: storedOptions?.path ?? '/',
-      maxAge: 0,
-      ...(storedOptions
-        ? {
-            sameSite: storedOptions.sameSite,
-            secure: storedOptions.secure,
-            domain: storedOptions.domain,
-          }
-        : {}),
-    };
+    // Priority: explicit options from server-js > cached options > minimal defaults.
+    const cookieOptions: CookieOptions = options
+      ? {
+          path: options.path ?? '/',
+          maxAge: 0,
+          sameSite: options.sameSite ? capitalize(options.sameSite) : undefined,
+          secure: options.secure,
+          domain: options.domain,
+          httpOnly: options.httpOnly,
+        }
+      : (() => {
+          const storedOptions = this.cookieOptionsCache.get(name);
+          return {
+            path: storedOptions?.path ?? '/',
+            maxAge: 0,
+            ...(storedOptions
+              ? {
+                  sameSite: storedOptions.sameSite,
+                  secure: storedOptions.secure,
+                  domain: storedOptions.domain,
+                }
+              : {}),
+          };
+        })();
     setCookie(ctx, name, '', cookieOptions);
   }
 }

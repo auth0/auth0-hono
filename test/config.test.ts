@@ -485,6 +485,106 @@ describe('Environment Configuration', () => {
     });
   });
 
+  // Verify two-tier cache doesn't allow cross-contamination
+  describe('Config cache Tier-1/Tier-2 isolation (VULN-8)', () => {
+    it('should use Tier-1 (ref equality) for configs with functions — no Tier-2 collision', () => {
+      const configWithFn: InitConfiguration = {
+        domain: 'auth.example.com',
+        baseURL: 'https://app.example.com',
+        clientID: 'client-a',
+        clientSecret: 'test-secret',
+        session: { secret: 'test-secret-longer-than-32-chars' },
+        debug: () => {}, // Function field → Tier-1 only
+      };
+
+      const result1 = parseConfiguration(configWithFn);
+      const result2 = parseConfiguration(configWithFn);
+
+      // Same reference → Tier-1 cache hit
+      expect(result1).toBe(result2);
+      expect(result1.clientID).toBe('client-a');
+    });
+
+    it('should use Tier-2 (JSON key) for env-only configs without functions', () => {
+      // Simulates ensureClient() creating new objects with same values per-request
+      const makeEnvConfig = (): InitConfiguration => ({
+        domain: 'auth.example.com',
+        baseURL: 'https://app.example.com',
+        clientID: 'client-b',
+        clientSecret: 'test-secret',
+        session: { secret: 'test-secret-longer-than-32-chars' },
+      });
+
+      const result1 = parseConfiguration(makeEnvConfig());
+      const result2 = parseConfiguration(makeEnvConfig());
+
+      // Different references but same values → Tier-2 hit
+      expect(result1).toBe(result2);
+      expect(result1.clientID).toBe('client-b');
+    });
+
+    it('should NOT collide between function-bearing and function-free configs with same serializable fields', () => {
+      // Key insight: JSON.stringify drops functions. If Tier-2 cached the function-bearing
+      // config (wrong), then the function-free lookup would return a result with a custom
+      // debug function. If correctly routed to Tier-1, the function stays isolated.
+
+      // Config WITH custom debug function (should route to Tier-1 only)
+      const configWithFn: InitConfiguration = {
+        domain: 'auth.example.com',
+        baseURL: 'https://app.example.com',
+        clientID: 'client-c',
+        clientSecret: 'test-secret',
+        session: { secret: 'test-secret-longer-than-32-chars' },
+        debug: () => { /* custom logger */ },
+      };
+
+      // Config WITHOUT function (should route to Tier-2) — same serializable fields
+      const configWithoutFn: InitConfiguration = {
+        domain: 'auth.example.com',
+        baseURL: 'https://app.example.com',
+        clientID: 'client-c',
+        clientSecret: 'test-secret',
+        session: { secret: 'test-secret-longer-than-32-chars' },
+      };
+
+      const resultWithFn = parseConfiguration(configWithFn);
+      const resultWithoutFn = parseConfiguration(configWithoutFn);
+
+      // Critical assertion: function-bearing config retains custom debug
+      expect(resultWithFn.debug).toBe(configWithFn.debug);
+
+      // Function-free config gets default debug (not the custom one from Tier-1)
+      // If there WAS a collision, resultWithoutFn.debug would be configWithFn.debug
+      expect(resultWithoutFn.debug).not.toBe(configWithFn.debug);
+    });
+
+    it('should NOT collide between two different env-only configs in Tier-2', () => {
+      const configA: InitConfiguration = {
+        domain: 'tenant-a.auth0.com',
+        baseURL: 'https://app-a.example.com',
+        clientID: 'client-a',
+        clientSecret: 'secret-a-longer-than-32-chars-xx',
+        session: { secret: 'secret-a-longer-than-32-chars-xx' },
+      };
+
+      const configB: InitConfiguration = {
+        domain: 'tenant-b.auth0.com',
+        baseURL: 'https://app-b.example.com',
+        clientID: 'client-b',
+        clientSecret: 'secret-b-longer-than-32-chars-xx',
+        session: { secret: 'secret-b-longer-than-32-chars-xx' },
+      };
+
+      const resultA = parseConfiguration(configA);
+      const resultB = parseConfiguration(configB);
+
+      // Different JSON keys → different cache entries → no collision
+      expect(resultA.domain).toBe('tenant-a.auth0.com');
+      expect(resultB.domain).toBe('tenant-b.auth0.com');
+      expect(resultA).not.toBe(resultB);
+    });
+  });
+
   describe('No process.env usage verification (REQ-BUG-1)', () => {
     it('should resolve config entirely from env(c) parameter without accessing process.env', () => {
       const config: InitConfiguration = {

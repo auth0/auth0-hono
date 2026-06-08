@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { callback } from '../../src/middleware/callback';
 import { SessionData } from '@auth0/auth0-server-js';
 import { Auth0Error } from '../../src/errors/Auth0Error';
+import { installCaptureInterceptor } from '../../src/session/captureRegistry';
 import { createMockContext, createMockClient, createMockConfig, createMockSession } from '../fixtures';
 
 // Mock dependencies
@@ -37,6 +38,7 @@ describe('onCallback Hook', () => {
   let mockClient: any;
   let mockSession: SessionData;
   let mockStateStore: any;
+  let mockStateStoreSetSpy: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,6 +80,12 @@ describe('onCallback Hook', () => {
     });
 
     // Set up mock stateStore with contract-enforcing set
+    mockStateStoreSetSpy = vi.fn().mockImplementation(async (_id: string, stateData: any) => {
+      // Enforce contract: internal.createdAt must exist
+      if (!stateData?.internal?.createdAt) {
+        throw new TypeError("Cannot read properties of undefined (reading 'createdAt')");
+      }
+    });
     mockStateStore = {
       get: vi.fn().mockResolvedValue({
         ...mockSession,
@@ -86,13 +94,13 @@ describe('onCallback Hook', () => {
           createdAt: Math.floor(Date.now() / 1000),
         },
       }),
-      set: vi.fn().mockImplementation(async (_id: string, stateData: any) => {
-        // Enforce contract: internal.createdAt must exist
-        if (!stateData?.internal?.createdAt) {
-          throw new TypeError("Cannot read properties of undefined (reading 'createdAt')");
-        }
-      }),
+      set: mockStateStoreSetSpy,
+      delete: vi.fn(),
     };
+    // Install capture interceptor on mock stateStore (same as real init in client.ts)
+    // Note: this replaces mockStateStore.set with the interceptor, which internally
+    // delegates to mockStateStoreSetSpy. Use mockStateStoreSetSpy for call assertions.
+    installCaptureInterceptor(mockStateStore, 'appSession');
     mockContext.vars['__auth0_state_store'] = mockStateStore;
 
     mockContext.get = vi.fn((key: string) => {
@@ -149,7 +157,7 @@ describe('onCallback Hook', () => {
 
     // Find enrichment call (removeIfExists=false, distinct from completeInteractiveLogin's call with true)
 
-    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+    const enrichmentCall = mockStateStoreSetSpy.mock.calls.find(
       (call: any[]) => call[2] === false
     );
     expect(enrichmentCall).toBeDefined();
@@ -320,7 +328,7 @@ describe('onCallback Hook', () => {
 
     // Find enrichment call (removeIfExists=false)
 
-    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+    const enrichmentCall = mockStateStoreSetSpy.mock.calls.find(
       (call: any[]) => call[2] === false
     );
     expect(enrichmentCall).toBeDefined();
@@ -352,7 +360,7 @@ describe('onCallback Hook', () => {
     // Verify internal field was preserved from captured state (set during completeInteractiveLogin)
 
     // stateStore.set is called twice: once by completeInteractiveLogin (via proxy), once by enrichment
-    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+    const enrichmentCall = mockStateStoreSetSpy.mock.calls.find(
       (call: any[]) => call[2] === false // enrichment uses removeIfExists=false
     );
     expect(enrichmentCall).toBeDefined();
@@ -383,7 +391,7 @@ describe('onCallback Hook', () => {
 
     // Find the enrichment call (removeIfExists=false)
 
-    const enrichmentCall = (mockStateStore.set as any).mock.calls.find(
+    const enrichmentCall = mockStateStoreSetSpy.mock.calls.find(
       (call: any[]) => call[2] === false
     );
     expect(enrichmentCall).toBeDefined();

@@ -1,10 +1,10 @@
 import { OIDCAuthorizationRequestParams } from '@/config/authRequest.js';
-import { getClient, ensureClient } from '@/config/index.js';
+import { ensureClient, getClient } from '@/config/index.js';
+import { mapServerError } from '@/errors/errorMap.js';
 import { OIDCEnv } from '@/lib/honoEnv.js';
 import { toSafeRedirect } from '@/utils/util.js';
-import { mapServerError } from '@/errors/errorMap.js';
-import { createMiddleware } from 'hono/factory';
 import { MiddlewareHandler } from 'hono';
+import { createMiddleware } from 'hono/factory';
 
 export type LoginParams = {
   /**
@@ -67,6 +67,7 @@ const BLOCKED_FORWARD_PARAMS = new Set([
   'code_challenge_method',
   'state',
   'nonce',
+  'max_age',
 ]);
 
 /**
@@ -124,6 +125,11 @@ export const login = (params: LoginParams = {}) => {
           if (value) {
             // Normalize to string: if array, use first value (standard behavior)
             const normalizedValue = Array.isArray(value) ? value[0] : value;
+            // Reject values containing CR/LF/NUL to prevent HTTP Response Splitting.
+            // Ref: https://owasp.org/www-community/attacks/HTTP_Response_Splitting
+            if (/[\r\n\0]/.test(normalizedValue)) {
+              continue;
+            }
             paramsFromQuery[param] = normalizedValue;
           }
         }

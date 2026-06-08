@@ -1,15 +1,15 @@
-import { getClient, ensureClient } from '@/config/index.js';
-import { createRouteUrl, toSafeRedirect } from '@/utils/util.js';
-import { mapServerError } from '@/errors/errorMap.js';
-import { Auth0Error } from '@/errors/Auth0Error.js';
-import { Next, MiddlewareHandler } from 'hono';
-import { createMiddleware } from 'hono/factory';
-import { OIDCEnv } from '@/lib/honoEnv.js';
-import { deleteSilentLoginCookie } from './silentLogin.js';
-import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
-import { STATE_STORE_KEY } from '@/lib/constants.js';
 import { Configuration } from '@/config/Configuration.js';
-import { Context } from 'hono';
+import { ensureClient, getClient } from '@/config/index.js';
+import { Auth0Error } from '@/errors/Auth0Error.js';
+import { mapServerError } from '@/errors/errorMap.js';
+import { STATE_STORE_KEY } from '@/lib/constants.js';
+import { OIDCEnv } from '@/lib/honoEnv.js';
+import { clearCapturedState, getCapturedState } from '@/session/captureRegistry.js';
+import { createRouteUrl, toSafeRedirect } from '@/utils/util.js';
+import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
+import { Context, MiddlewareHandler, Next } from 'hono';
+import { createMiddleware } from 'hono/factory';
+import { deleteSilentLoginCookie } from './silentLogin.js';
 
 /**
  * Get the state store and cookie identifier from context.
@@ -60,33 +60,22 @@ export const callback = (params: CallbackParams = {}) => {
       // Capture the session that completeInteractiveLogin persists.
       // We can't re-read from cookies because setCookie writes to response headers
       // but getCookie reads from the request Cookie header (stale on callback request).
-      // We intercept stateStore.set() to capture the written StateData in memory.
       //
-      // CONCURRENCY NOTE: The patch window is ~50ms (duration of completeInteractiveLogin).
-      // In serverless (1 request/isolate), no issue. In Node.js with concurrent callbacks,
-      // interleaving is theoretically possible but practically negligible (callback URL is
-      // hit once per login flow, not under concurrent load).
+      // Session capture uses a WeakMap-based registry (installed once at init in client.ts)
+      // keyed by the per-request Hono Context. This provides concurrency-safe isolation
+      // without per-request monkey-patching of the shared stateStore singleton.
+      // See: src/session/captureRegistry.ts
       const { stateStore, identifier } = getStateStoreContext(c, configuration);
-      let capturedStateData: StateData | null = null;
-      const originalSet = stateStore.set;
-      stateStore.set = async function (this: StateStore<Context>, id, data, removeIfExists, opts) {
-        if (id === identifier) {
-          capturedStateData = data as StateData;
-        }
-        return originalSet.call(this, id, data, removeIfExists, opts);
-      };
 
-      let appState: { returnTo: string } | undefined;
-      try {
-        // Complete the login flow
-        ({ appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
-          createRouteUrl(c.req.url, baseURL),
-          c
-        ));
-      } finally {
-        // Always restore — even if completeInteractiveLogin throws
-        stateStore.set = originalSet;
-      }
+      // Complete the login flow
+      const { appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
+        createRouteUrl(c.req.url, baseURL),
+        c
+      );
+
+      // Retrieve captured state from the per-request registry slot
+      const capturedStateData = getCapturedState(c) ?? null;
+      clearCapturedState(c);
 
       // Use captured session (strips internal to match SessionData contract)
       if (capturedStateData) {
@@ -120,14 +109,13 @@ export const callback = (params: CallbackParams = {}) => {
               await stateStore.set(identifier, enrichedState, false, c);
             } else {
               // Shouldn't happen: completeInteractiveLogin succeeded but we didn't capture state
-              configuration.debug(
-                'Warning: Hook enrichment discarded — session state not captured during login.'
-              );
+              configuration.debug('Warning: Hook enrichment discarded — session state not captured during login.');
             }
           }
           // void/undefined: use default behavior
         } catch (hookErr) {
-          // Hook threw — log but don't mask the login
+          // Hook errors are intentionally non-fatal on the success path.
+          // Rationale: A successful OAuth exchange must not be masked by downstream hook failures
           configuration.debug('onCallback hook error', { error: hookErr });
         }
       }
@@ -141,9 +129,11 @@ export const callback = (params: CallbackParams = {}) => {
         return next();
       }
 
+      // appState is encrypted in transaction cookie (server-js),
+      // but validate returnTo anyway to eliminate open redirect class entirely.
       const finalURL =
         (params.redirectAfterLogin ? toSafeRedirect(params.redirectAfterLogin, baseURL) : undefined) ??
-        appState?.returnTo ??
+        (appState?.returnTo ? toSafeRedirect(appState.returnTo, baseURL) : undefined) ??
         baseURL;
 
       return c.redirect(finalURL);

@@ -492,6 +492,48 @@ vars = { AUTH0_DOMAIN = "tenant.auth0.com", AUTH0_CLIENT_ID = "abc123" }
 
 The SDK uses Hono's `env(c)` adapter, which correctly reads CF Workers bindings.
 
+### HonoX on Cloudflare Pages
+
+If deploying a [HonoX](https://honox.dev) project (Hono + React SSR) on Cloudflare Pages, register the auth middleware in `app/routes/_middleware.ts`, not `server.ts`. Use HonoX's `createRoute` wrapper and access CF bindings via `c.env`:
+
+```typescript
+// app/routes/_middleware.ts
+import { createRoute } from 'honox/factory'
+import { Context, Next } from 'hono'
+import { auth0 } from '@auth0/auth0-hono'
+import type { OIDCEnv } from '@auth0/auth0-hono'
+
+type Env = {
+  AUTH0_DOMAIN: string
+  AUTH0_CLIENT_ID: string
+  AUTH0_CLIENT_SECRET: string
+  AUTH0_SESSION_ENCRYPTION_KEY: string
+  APP_BASE_URL: string
+}
+
+export const myAuth = (c: Context<OIDCEnv<{ Bindings: Env }>>, next: Next) => {
+  const a = auth0({
+    domain: c.env.AUTH0_DOMAIN,
+    clientID: c.env.AUTH0_CLIENT_ID,
+    clientSecret: c.env.AUTH0_CLIENT_SECRET,
+    session: { secret: c.env.AUTH0_SESSION_ENCRYPTION_KEY },
+    baseURL: c.env.APP_BASE_URL,
+  })
+  return a(c, next)
+}
+
+export default createRoute(myAuth)
+```
+
+Bind variables in `wrangler.toml`:
+
+```toml
+env.pages
+vars = { AUTH0_DOMAIN = "...", AUTH0_CLIENT_ID = "...", APP_BASE_URL = "..." }
+```
+
+The SDK uses Hono's `env(c)` adapter internally, so no `process.env` is needed on the critical path—the concern above is solely for accessing your own config values from CF bindings.
+
 ### Session cookie too large?
 
 If you're enriching sessions with large data via `updateSession()`, consider using a custom stateful session store:

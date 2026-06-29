@@ -5,7 +5,7 @@ import { mapServerError } from '@/errors/errorMap.js';
 import { STATE_STORE_KEY } from '@/lib/constants.js';
 import { OIDCEnv } from '@/lib/honoEnv.js';
 import { clearCapturedState, getCapturedState } from '@/session/captureRegistry.js';
-import { createRouteUrl, toSafeRedirect } from '@/utils/util.js';
+import { createCallbackUrl, toSafeRedirect } from '@/utils/util.js';
 import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
 import { Context, MiddlewareHandler, Next } from 'hono';
 import { createMiddleware } from 'hono/factory';
@@ -68,8 +68,10 @@ export const callback = (params: CallbackParams = {}) => {
       const { stateStore, identifier } = getStateStoreContext(c, configuration);
 
       // Complete the login flow
+      // Use createCallbackUrl to ensure baseURL's origin (protocol+host+port) is used,
+      // not the request URL's protocol/host which may be wrong behind a reverse proxy
       const { appState } = await client.completeInteractiveLogin<{ returnTo: string } | undefined>(
-        createRouteUrl(c.req.url, baseURL),
+        createCallbackUrl(c.req.url, baseURL),
         c
       );
 

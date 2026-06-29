@@ -20,24 +20,24 @@ npm install @auth0/auth0-hono
 ## Quick Start
 
 ```typescript
-import { Hono } from 'hono'
-import { auth0, requiresAuth } from '@auth0/auth0-hono'
+import { Hono } from 'hono';
+import { auth0, requiresAuth } from '@auth0/auth0-hono';
 
-const app = new Hono()
+const app = new Hono();
 
 // Add auth to every route
-app.use('*', auth0())
+app.use('*', auth0());
 
 // Public route
-app.get('/', (c) => c.text('Home'))
+app.get('/', (c) => c.text('Home'));
 
 // Protected route
 app.get('/profile', requiresAuth(), (c) => {
-  const user = c.var.auth0.user
-  return c.json({ name: user?.name, sub: user?.sub })
-})
+  const user = c.var.auth0.user;
+  return c.json({ name: user?.name, sub: user?.sub });
+});
 
-export default app
+export default app;
 ```
 
 ## Configuration
@@ -46,13 +46,13 @@ export default app
 
 The SDK reads configuration from Hono's environment (works across all runtimes — Node.js, CF Workers, Bun, Deno):
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AUTH0_DOMAIN` | Yes | Auth0 domain (e.g., `tenant.auth0.com`) |
-| `AUTH0_CLIENT_ID` | Yes | Auth0 application client ID |
-| `AUTH0_CLIENT_SECRET` | No | Client secret (required for refresh token flow) |
-| `AUTH0_SESSION_ENCRYPTION_KEY` | Yes | 32+ character encryption key for session cookies |
-| `APP_BASE_URL` | Yes | Base URL of your application (e.g., `https://myapp.com`) |
+| Variable                       | Required | Description                                              |
+| ------------------------------ | -------- | -------------------------------------------------------- |
+| `AUTH0_DOMAIN`                 | Yes      | Auth0 domain (e.g., `tenant.auth0.com`)                  |
+| `AUTH0_CLIENT_ID`              | Yes      | Auth0 application client ID                              |
+| `AUTH0_CLIENT_SECRET`          | No       | Client secret (required for refresh token flow)          |
+| `AUTH0_SESSION_ENCRYPTION_KEY` | Yes      | 32+ character encryption key for session cookies         |
+| `APP_BASE_URL`                 | Yes      | Base URL of your application (e.g., `https://myapp.com`) |
 
 **.env example:**
 
@@ -89,7 +89,7 @@ app.use(
       audience: 'https://api.myapp.com',
     },
   })
-)
+);
 ```
 
 **Config precedence:** explicit config > environment variables > schema defaults
@@ -103,10 +103,11 @@ app.use(
 Main middleware — sets up routes, session management, and context population.
 
 ```typescript
-app.use('*', auth0())
+app.use('*', auth0());
 ```
 
 **What it handles automatically:**
+
 - Login/callback/logout routes (`/auth/login`, `/auth/callback`, `/auth/logout`)
 - Backchannel logout
 - Session encryption and cookie management
@@ -114,6 +115,7 @@ app.use('*', auth0())
 - Token refresh (transparent, deduplicated)
 
 **Options:**
+
 ```typescript
 {
   domain?: string                           // Auth0 domain
@@ -150,8 +152,8 @@ Enforce authentication on protected routes. Returns 401 on unauthenticated reque
 ```typescript
 app.get('/dashboard', requiresAuth(), (c) => {
   // c.var.auth0.user is guaranteed to exist here
-  return c.json(c.var.auth0.user)
-})
+  return c.json(c.var.auth0.user);
+});
 ```
 
 ### `requiresOrg(options?)`
@@ -160,15 +162,20 @@ Enforce organization membership. Throws `AccessDeniedError` if user is not in th
 
 ```typescript
 // Any organization
-app.get('/admin', requiresAuth(), requiresOrg(), handler)
+app.get('/admin', requiresAuth(), requiresOrg(), handler);
 
 // Specific organization
-app.get('/admin', requiresAuth(), requiresOrg({ orgId: 'org_123' }), handler)
+app.get('/admin', requiresAuth(), requiresOrg({ orgId: 'org_123' }), handler);
 
 // Custom check
-app.get('/admin', requiresAuth(), requiresOrg((c) => {
-  return c.var.auth0.user?.org_id === 'org_123'
-}), handler)
+app.get(
+  '/admin',
+  requiresAuth(),
+  requiresOrg((c) => {
+    return c.var.auth0.user?.org_id === 'org_123';
+  }),
+  handler
+);
 ```
 
 ### `claimEquals(claim, value)`
@@ -176,11 +183,7 @@ app.get('/admin', requiresAuth(), requiresOrg((c) => {
 Check if a claim equals an expected value.
 
 ```typescript
-app.get('/admin',
-  requiresAuth(),
-  claimEquals('role', 'admin'),
-  handler
-)
+app.get('/admin', requiresAuth(), claimEquals('role', 'admin'), handler);
 ```
 
 ### `claimIncludes(claim, ...values)`
@@ -188,11 +191,7 @@ app.get('/admin',
 Check if a claim array includes any of the provided values.
 
 ```typescript
-app.get('/reports',
-  requiresAuth(),
-  claimIncludes('permissions', 'read:reports', 'admin:reports'),
-  handler
-)
+app.get('/reports', requiresAuth(), claimIncludes('permissions', 'read:reports', 'admin:reports'), handler);
 ```
 
 ### `claimCheck(fn)`
@@ -200,11 +199,12 @@ app.get('/reports',
 Custom claim validation function.
 
 ```typescript
-app.get('/restricted',
+app.get(
+  '/restricted',
   requiresAuth(),
   claimCheck((user) => user.email_verified === true),
   handler
-)
+);
 ```
 
 ## Helpers
@@ -214,9 +214,9 @@ app.get('/restricted',
 Retrieve the full session object. Returns `null` if unauthenticated.
 
 ```typescript
-const session = await getSession(c)
+const session = await getSession(c);
 if (session) {
-  console.log(session.user.email)
+  console.log(session.user.email);
 }
 ```
 
@@ -225,8 +225,8 @@ if (session) {
 Get the authenticated user. Throws `MissingSessionError` if not authenticated.
 
 ```typescript
-const user = getUser(c)
-console.log(user.name)
+const user = getUser(c);
+console.log(user.name);
 ```
 
 ### `getAccessToken(c)`
@@ -234,12 +234,12 @@ console.log(user.name)
 Get an access token. Automatically refreshes if expired. The token audience is determined by `authorizationParams.audience` in the `auth0()` middleware config.
 
 ```typescript
-const { accessToken } = await getAccessToken(c)
+const { accessToken } = await getAccessToken(c);
 
 // Use in API call
 const res = await fetch('https://api.example.com/data', {
-  headers: { Authorization: `Bearer ${accessToken}` }
-})
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
 ```
 
 **Token deduplication:** If 5 parallel requests call `getAccessToken()` and a refresh is needed, only 1 refresh request is made. Others await the same promise.
@@ -253,8 +253,8 @@ Get a token for a specific connection (for service-to-service communication).
 ```typescript
 const token = await getAccessTokenForConnection(c, {
   connection: 'google-oauth2',
-  loginHint: 'user@example.com'
-})
+  loginHint: 'user@example.com',
+});
 ```
 
 ### `updateSession(c, data)`
@@ -264,11 +264,11 @@ Merge custom data into the session. Reserved fields (`user`, `idToken`, `refresh
 ```typescript
 await updateSession(c, {
   permissions: ['read:data', 'write:data'],
-  customField: 'custom value'
-})
+  customField: 'custom value',
+});
 
 // Now available on all subsequent requests
-const perms = c.var.auth0.session?.permissions
+const perms = c.var.auth0.session?.permissions;
 ```
 
 ## Standalone Handlers
@@ -276,18 +276,13 @@ const perms = c.var.auth0.session?.permissions
 Use authentication handlers without the `auth0()` middleware:
 
 ```typescript
-import {
-  handleLogin,
-  handleLogout,
-  handleCallback,
-  handleBackchannelLogout
-} from '@auth0/auth0-hono'
+import { handleLogin, handleLogout, handleCallback, handleBackchannelLogout } from '@auth0/auth0-hono';
 
 // Mount handlers on custom routes
-app.get('/login', handleLogin())
-app.get('/logout', handleLogout())
-app.get('/callback', handleCallback())
-app.post('/logout-notify', handleBackchannelLogout())
+app.get('/login', handleLogin());
+app.get('/logout', handleLogout());
+app.get('/callback', handleCallback());
+app.post('/logout-notify', handleBackchannelLogout());
 ```
 
 These resolve configuration from environment variables automatically.
@@ -299,24 +294,28 @@ These resolve configuration from environment variables automatically.
 Run custom logic after a successful login or on login error. Use for session enrichment, error customization, or logging.
 
 ```typescript
-app.use('*', auth0({
-  async onCallback(c, error, session) {
-    if (error) {
-      // Error path: return custom error page or response
-      return c.redirect('/login?error=true')
-    }
+app.use(
+  '*',
+  auth0({
+    async onCallback(c, error, session) {
+      if (error) {
+        // Error path: return custom error page or response
+        return c.redirect('/login?error=true');
+      }
 
-    // Success path: enrich session with custom data
-    const permissions = await fetchUserPermissions(session.user.sub)
-    return {
-      ...session,
-      permissions
-    }
-  }
-}))
+      // Success path: enrich session with custom data
+      const permissions = await fetchUserPermissions(session.user.sub);
+      return {
+        ...session,
+        permissions,
+      };
+    },
+  })
+);
 ```
 
 **Contract:**
+
 - **Success:** `error` is `null`, `session` is populated. Return enriched `SessionData` or `Response`.
 - **Error:** `error` is `Auth0Error`, `session` is `null`. Return `Response` to override error page. Return value ignored otherwise.
 - **Promise rejection in hook:** Original error always propagates.
@@ -326,50 +325,42 @@ app.use('*', auth0({
 The SDK throws typed errors that extend Hono's `HTTPException`. Catch and handle them in `app.onError`:
 
 ```typescript
-import {
-  Auth0Error,
-  AccessDeniedError,
-  LoginRequiredError,
-  InvalidGrantError
-} from '@auth0/auth0-hono'
+import { Auth0Error, AccessDeniedError, LoginRequiredError, InvalidGrantError } from '@auth0/auth0-hono';
 
 app.onError((err, c) => {
   if (err instanceof AccessDeniedError) {
-    return c.json({ error: 'Access denied' }, 403)
+    return c.json({ error: 'Access denied' }, 403);
   }
 
   if (err instanceof LoginRequiredError) {
-    return c.redirect('/auth/login')
+    return c.redirect('/auth/login');
   }
 
   if (err instanceof InvalidGrantError) {
-    return c.json({ error: 'Token expired, please log in again' }, 401)
+    return c.json({ error: 'Token expired, please log in again' }, 401);
   }
 
   if (err instanceof Auth0Error) {
-    return c.json(
-      { error: err.code, error_description: err.description },
-      err.status
-    )
+    return c.json({ error: err.code, error_description: err.description }, err.status);
   }
 
   // Other errors
-  return c.json({ error: 'Internal server error' }, 500)
-})
+  return c.json({ error: 'Internal server error' }, 500);
+});
 ```
 
 ### Error Classes
 
-| Class | HTTP Status | Code | When Thrown |
-|-------|-------------|------|------------|
-| `Auth0Error` | 500 | `unknown_error` | Base class — catch-all |
-| `LoginRequiredError` | 401 | `login_required` | `requiresAuth()` on unauthenticated request |
-| `AccessDeniedError` | 403 | `access_denied` | Authorization check failed (claims, organization) |
-| `InvalidGrantError` | 401 | `invalid_grant` | Refresh token expired or invalid |
-| `MissingSessionError` | 401 | `missing_session` | `getUser()` called without session |
-| `MissingTransactionError` | 400 | `missing_transaction` | Callback without login transaction |
-| `TokenRefreshError` | 401 | `token_refresh_error` | Token refresh failed |
-| `ConnectionTokenError` | 401 | `connection_token_error` | Connection token request failed |
+| Class                     | HTTP Status | Code                     | When Thrown                                       |
+| ------------------------- | ----------- | ------------------------ | ------------------------------------------------- |
+| `Auth0Error`              | 500         | `unknown_error`          | Base class — catch-all                            |
+| `LoginRequiredError`      | 401         | `login_required`         | `requiresAuth()` on unauthenticated request       |
+| `AccessDeniedError`       | 403         | `access_denied`          | Authorization check failed (claims, organization) |
+| `InvalidGrantError`       | 401         | `invalid_grant`          | Refresh token expired or invalid                  |
+| `MissingSessionError`     | 401         | `missing_session`        | `getUser()` called without session                |
+| `MissingTransactionError` | 400         | `missing_transaction`    | Callback without login transaction                |
+| `TokenRefreshError`       | 401         | `token_refresh_error`    | Token refresh failed                              |
+| `ConnectionTokenError`    | 401         | `connection_token_error` | Connection token request failed                   |
 
 All errors respond with OAuth2-compliant JSON:
 
@@ -384,13 +375,13 @@ All errors respond with OAuth2-compliant JSON:
 
 This SDK works across multiple JavaScript runtimes:
 
-| Runtime | Level | Status |
-|---------|-------|--------|
-| Node.js 18+ | Primary | Full support |
-| Cloudflare Workers | Primary | Full support |
-| Bun 1.x+ | Secondary | Works, best-effort testing |
-| Deno 1.x/2.x | Secondary | Works, best-effort testing |
-| Vercel Edge | Secondary | Works, best-effort testing |
+| Runtime            | Level     | Status                     |
+| ------------------ | --------- | -------------------------- |
+| Node.js 18+        | Primary   | Full support               |
+| Cloudflare Workers | Primary   | Full support               |
+| Bun 1.x+           | Secondary | Works, best-effort testing |
+| Deno 1.x/2.x       | Secondary | Works, best-effort testing |
+| Vercel Edge        | Secondary | Works, best-effort testing |
 
 **Key:** The SDK uses Hono's `env(c)` adapter for all environment variable access, making it runtime-agnostic. No `process.env` anywhere on the critical path.
 
@@ -403,15 +394,15 @@ Full TypeScript support with types for context, session, user, and tokens.
 Use `OIDCEnv` for strict typing of middleware handlers:
 
 ```typescript
-import { OIDCEnv, requiresAuth } from '@auth0/auth0-hono'
+import { OIDCEnv, requiresAuth } from '@auth0/auth0-hono';
 
 app.get('/protected', requiresAuth(), (c: Context<OIDCEnv>) => {
   // c.var.auth0 is fully typed and non-null here
-  const user = c.var.auth0.user
-  const session = c.var.auth0.session
-  const org = c.var.auth0.org
-  return c.json({ user, session, org })
-})
+  const user = c.var.auth0.user;
+  const session = c.var.auth0.session;
+  const org = c.var.auth0.org;
+  return c.json({ user, session, org });
+});
 ```
 
 ### Augmenting Hono's ContextVariableMap
@@ -419,14 +410,14 @@ app.get('/protected', requiresAuth(), (c: Context<OIDCEnv>) => {
 To get autocomplete on `c.var.auth0` globally, import the type augmentation:
 
 ```typescript
-import '@auth0/auth0-hono/lib/honoEnv'
+import '@auth0/auth0-hono/lib/honoEnv';
 
 app.get('/', (c) => {
   // c.var.auth0 now has autocomplete (but still optional — null check required)
   if (c.var.auth0?.user) {
-    return c.json(c.var.auth0.user)
+    return c.json(c.var.auth0.user);
   }
-})
+});
 ```
 
 ### Type Definitions
@@ -434,50 +425,46 @@ app.get('/', (c) => {
 ```typescript
 // User claims
 export interface Auth0User extends UserClaims {
-  sub: string           // Subject (user ID)
-  name?: string
-  email?: string
-  email_verified?: boolean
-  org_id?: string       // Organization ID (if in org)
-  org_name?: string     // Organization name (if in org)
-  [key: string]: any    // Custom claims
+  sub: string; // Subject (user ID)
+  name?: string;
+  email?: string;
+  email_verified?: boolean;
+  org_id?: string; // Organization ID (if in org)
+  org_name?: string; // Organization name (if in org)
+  [key: string]: any; // Custom claims
 }
 
 // Organization context
 export interface Auth0Organization {
-  id: string
-  name?: string
+  id: string;
+  name?: string;
 }
 
 // Full session (all tokens, user, custom fields)
 export interface Auth0Session {
-  user: Auth0User
-  idToken: string
-  refreshToken?: string
-  tokenSets: TokenSet[]
+  user: Auth0User;
+  idToken: string;
+  refreshToken?: string;
+  tokenSets: TokenSet[];
   // + custom fields from updateSession()
-  [key: string]: unknown
+  [key: string]: unknown;
 }
 
 // Main context variable
 export interface Auth0Context {
-  user: Auth0User | null
-  session: Auth0Session | null
-  org: Auth0Organization | null
+  user: Auth0User | null;
+  session: Auth0Session | null;
+  org: Auth0Organization | null;
 }
 
 // Token set
 export type Auth0TokenSet = {
-  accessToken: string
-  audience: string
-  scope?: string
-  expiresAt: number
-}
+  accessToken: string;
+  audience: string;
+  scope?: string;
+  expiresAt: number;
+};
 ```
-
-## API Reference
-
-For detailed API documentation, see [DESIGN.md](./forge/design/DESIGN.md) (technical spec) and [BETA-OVERVIEW.md](./forge/design/BETA-OVERVIEW.md) (feature overview).
 
 ## Troubleshooting
 
@@ -497,23 +484,26 @@ The SDK uses Hono's `env(c)` adapter, which correctly reads CF Workers bindings.
 If you're enriching sessions with large data via `updateSession()`, consider using a custom stateful session store:
 
 ```typescript
-import { SessionStore } from '@auth0/auth0-hono'
+import { SessionStore } from '@auth0/auth0-hono';
 
 const customStore: SessionStore = {
   async set(name, data, isTransaction, ctx) {
     // Store session data in your database
-    await db.sessions.set(data.internal.sid, data)
+    await db.sessions.set(data.internal.sid, data);
   },
   async get(name, ctx) {
     // Retrieve from database
-    return await db.sessions.get(sessionId)
+    return await db.sessions.get(sessionId);
   },
   // ... delete, clear
-}
+};
 
-app.use('*', auth0({
-  session: { secret: '...', store: customStore }
-}))
+app.use(
+  '*',
+  auth0({
+    session: { secret: '...', store: customStore },
+  })
+);
 ```
 
 ### Token not refreshing?

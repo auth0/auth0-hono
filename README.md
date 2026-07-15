@@ -53,6 +53,9 @@ The SDK reads configuration from Hono's environment (works across all runtimes �
 | `AUTH0_CLIENT_SECRET` | No | Client secret (required for refresh token flow) |
 | `AUTH0_SESSION_ENCRYPTION_KEY` | Yes | 32+ character encryption key for session cookies |
 | `APP_BASE_URL` | Yes | Base URL of your application (e.g., `https://myapp.com`) |
+| `AUTH0_DEBUG` | No | Set to `true` (or `1`/`yes`/`on`) to enable a built-in debug logger. Off by default. |
+
+> **Debug logging:** When `AUTH0_DEBUG` is truthy and you have not supplied your own `debug` function in config, the SDK installs a default logger that writes to `console.log`. All log metadata is passed through a redactor first, so access tokens, refresh tokens, client secrets, authorization/cookie headers, and PII (email, `sub`, name) are replaced with `[REDACTED_*]` placeholders and never written to the log. An explicit `debug` function in your config always takes precedence over this environment variable.
 
 **.env example:**
 
@@ -207,6 +210,24 @@ app.get('/restricted',
 )
 ```
 
+### `requiresScopes(...scopes)`
+
+Require that the authenticated user was granted **all** of the given OAuth2 scopes. Scopes are read from the user's `scope` claim (a space-delimited string per RFC 6749). Must run after `requiresAuth()`. Throws `Auth0Error` (HTTP 403, code `insufficient_claims`) if any scope is missing.
+
+```typescript
+app.use('/api/data', requiresAuth(), requiresScopes('read:data'))
+app.use('/api/admin', requiresAuth(), requiresScopes('read:data', 'write:data'))
+```
+
+### `requiresPermissions(...permissions)`
+
+Require that the authenticated user holds **all** of the given permissions. Permissions are read from the user's `permissions` claim (an array of strings, populated by Auth0 RBAC). Must run after `requiresAuth()`. Throws `Auth0Error` (HTTP 403, code `insufficient_claims`) if any permission is missing.
+
+```typescript
+app.use('/admin', requiresAuth(), requiresPermissions('admin'))
+app.use('/billing', requiresAuth(), requiresPermissions('read:billing', 'write:billing'))
+```
+
 ## Helpers
 
 ### `getSession(c)`
@@ -243,6 +264,22 @@ const res = await fetch('https://api.example.com/data', {
 ```
 
 **Token deduplication:** If 5 parallel requests call `getAccessToken()` and a refresh is needed, only 1 refresh request is made. Others await the same promise.
+
+**Options:** `getAccessToken(c, options?)` accepts an optional second argument. Omitting it preserves the original behavior exactly.
+
+```typescript
+const { accessToken } = await getAccessToken(c, {
+  audience: 'https://api.myapp.com', // must match the configured audience (see below)
+  scope: 'read:data',                // partitions the per-request token cache
+  refresh: true,                     // force a refresh, bypassing the cache
+})
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `audience` | `string` | Target audience. The underlying client binds its audience once (from `authorizationParams.audience`), so this must equal the configured audience. Passing a different value throws `Auth0Error` with code `unsupported_audience_override` (HTTP 400) rather than silently returning a token for the wrong audience. |
+| `scope` | `string` | Scope hint used to partition the per-request cache so different scopes never share a cached token. |
+| `refresh` | `boolean` | When `true`, bypass any cached in-flight token for this key and force a fresh request. Default `false`. |
 
 > **Note:** For connection-scoped tokens (e.g., Google OAuth2), use `getAccessTokenForConnection()` instead.
 
@@ -323,7 +360,25 @@ app.use('*', auth0({
 
 ## Error Handling
 
-The SDK throws typed errors that extend Hono's `HTTPException`. Catch and handle them in `app.onError`:
+### `auth0ErrorHandler` (recommended)
+
+For the common case, wire the built-in handler directly into `app.onError`. It maps SDK errors to sensible responses so you don't have to hand-map them:
+
+```typescript
+import { auth0ErrorHandler } from '@auth0/auth0-hono'
+
+app.onError(auth0ErrorHandler)
+```
+
+Behavior:
+
+- `LoginRequiredError` on an HTML request (`Accept: text/html`) → **302 redirect** to the configured login route, preserving the original path as `returnTo`.
+- Any other `Auth0Error` (or `LoginRequiredError` on a JSON request) → JSON body `{ error, error_description, statusCode }` using the error's own status (falling back to 500).
+- Non-Auth0 errors are **re-thrown untouched**, so your own error handling and Hono's default still apply — the handler never swallows unexpected errors.
+
+### Custom handling
+
+If you need custom behavior, the SDK throws typed errors that extend Hono's `HTTPException`. Catch and handle them in `app.onError`:
 
 ```typescript
 import {
@@ -379,6 +434,43 @@ All errors respond with OAuth2-compliant JSON:
   "error_description": "User does not belong to the required organization"
 }
 ```
+
+## Session Stores
+
+By default sessions are stored in encrypted cookies (stateless). Backchannel Logout (BCLO) invalidation by `sid` requires a **stateful** store. For Cloudflare Workers, use the built-in `KVSessionStore`, which persists sessions in Workers KV so they survive isolate restarts and are shared across isolates.
+
+```typescript
+import { auth0, KVSessionStore } from '@auth0/auth0-hono'
+
+// `AUTH0_SESSIONS` is a KV namespace binding declared in wrangler.toml
+app.use('*', (c, next) =>
+  auth0({
+    session: {
+      secret: c.env.AUTH0_SESSION_ENCRYPTION_KEY,
+      store: new KVSessionStore(c.env.AUTH0_SESSIONS),
+    },
+  })(c, next)
+)
+```
+
+**wrangler.toml:**
+
+```toml
+[[kv_namespaces]]
+binding = "AUTH0_SESSIONS"
+id = "<your-kv-namespace-id>"
+```
+
+The store keys sessions by identifier and maintains `sid` and `sub` indexes so BCLO logout tokens can be resolved to a session. All entries carry a TTL derived from the session's `absoluteDuration` / `inactivityDuration` (clamped to the Workers KV 60-second minimum), so stale sessions are cleaned up automatically. You can override the durations:
+
+```typescript
+new KVSessionStore(c.env.AUTH0_SESSIONS, {
+  absoluteDuration: 60 * 60 * 24 * 7, // 7 days
+  inactivityDuration: 60 * 60 * 12,   // 12 hours
+})
+```
+
+`KVSessionStore` accepts any object matching the `KVNamespaceLike` shape (`get`/`put`/`delete`), so it does not add a hard dependency on `@cloudflare/workers-types`. For Node.js, continue to use a cookie session or provide your own `SessionStore` implementation (e.g. Redis-backed).
 
 ## Multi-Runtime Support
 

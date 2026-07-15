@@ -3,9 +3,10 @@ import { Auth0Error } from '@/errors/Auth0Error.js';
 import { Auth0User } from '@/types/auth0.js';
 
 /**
- * @internal Helper to extract authenticated user from context
+ * @internal Helper to extract authenticated user from context.
+ * Exported for reuse by authorization middleware (e.g. requiresScopes).
  */
-function requireUser(c: Context): Auth0User {
+export function requireUser(c: Context): Auth0User {
   const user = c.var.auth0?.user;
 
   if (!user) {

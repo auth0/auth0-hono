@@ -69,11 +69,11 @@ describe('auth0ErrorHandler', () => {
     expect(res.status).toBe(403);
   });
 
-  it('falls back to 500 for a custom Auth0Error with an unusual status', async () => {
+  it('falls back to 500 when status is missing (nullish)', async () => {
     const ctx = ctxWithAccept('application/json');
-    // Force a falsy status to exercise the `|| 500` fallback.
+    // Simulate a malformed error with no status set → `?? 500` fallback.
     const err = new Auth0Error('weird', 500, 'custom_error');
-    (err as any).status = 0;
+    (err as any).status = undefined;
     const res = (await auth0ErrorHandler(err, ctx as any)) as Response;
     expect(res.status).toBe(500);
   });
@@ -86,6 +86,26 @@ describe('auth0ErrorHandler', () => {
     const location = res.headers.get('location');
     expect(location).toContain('/auth/login');
     expect(location).toContain('returnTo=%2Fprotected');
+  });
+
+  it('preserves the query string in returnTo (same-origin)', async () => {
+    const ctx = ctxWithAccept('text/html', 'https://app.test.com/search?q=foo&page=2');
+    const err = new LoginRequiredError('login required');
+    const res = (await auth0ErrorHandler(err, ctx as any)) as Response;
+    expect(res.status).toBe(302);
+    const location = res.headers.get('location')!;
+    const returnTo = new URL(location).searchParams.get('returnTo');
+    expect(returnTo).toBe('/search?q=foo&page=2');
+  });
+
+  it('re-throws the original error when auth0() middleware is missing', () => {
+    const ctx = ctxWithAccept('text/html');
+    // getClient throws when the middleware context is absent.
+    (getClient as Mock).mockImplementationOnce(() => {
+      throw new Error('Auth0 client not initialized');
+    });
+    const err = new LoginRequiredError('login required');
+    expect(() => auth0ErrorHandler(err, ctx as any)).toThrow(LoginRequiredError);
   });
 
   it('returns JSON for LoginRequiredError when the client wants JSON', async () => {

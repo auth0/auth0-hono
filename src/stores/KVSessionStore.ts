@@ -13,6 +13,11 @@ export interface KVNamespaceLike {
   get(key: string, options?: { type?: 'text' | 'json' }): Promise<unknown>;
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
   delete(key: string): Promise<void>;
+  list(options?: { prefix?: string; cursor?: string }): Promise<{
+    keys: { name: string }[];
+    list_complete: boolean;
+    cursor?: string;
+  }>;
 }
 
 /**
@@ -69,14 +74,20 @@ function readSub(stateData: StateData): string | undefined {
  * which is required for Backchannel Logout (BCLO) invalidation by `sid`.
  *
  * The store maintains two secondary lookup indexes so BCLO logout tokens can be
- * resolved to a session identifier:
- * - `sid-index:<sid>`  → session identifier (primary BCLO lookup)
- * - `sub-index:<sub>`  → session identifier (fallback for logout tokens that
- *   carry only a `sub` claim)
+ * resolved to session identifiers:
+ * - `sid-index:<sid>`             → session identifier (primary BCLO lookup; a
+ *   `sid` maps to exactly one session)
+ * - `sub-index:<sub>:<identifier>` → session identifier (one key per session, so
+ *   a logout token carrying only a `sub` invalidates ALL of that subject's
+ *   sessions, per RFC 9700 §2.4)
  *
  * All KV writes carry an `expirationTtl` so entries are cleaned up automatically
  * even if an explicit delete is missed. Writes are best-effort and not atomic;
  * a partially written record is bounded by its TTL.
+ *
+ * Inactivity/absolute session expiry is enforced by `@auth0/auth0-server-js` at
+ * the (encrypted) session-cookie layer via the cookie's `exp`; this store only
+ * persists the server-provided record and does not need its own activity clock.
  *
  * @example
  * ```typescript
@@ -101,16 +112,16 @@ export class KVSessionStore extends SessionStore {
     return `session:${identifier}`;
   }
 
-  private activityKey(identifier: string): string {
-    return `session-active:${identifier}`;
-  }
-
   private sidIndexKey(sid: string): string {
     return `sid-index:${sid}`;
   }
 
-  private subIndexKey(sub: string): string {
-    return `sub-index:${sub}`;
+  private subIndexPrefix(sub: string): string {
+    return `sub-index:${sub}:`;
+  }
+
+  private subIndexKey(sub: string, identifier: string): string {
+    return `${this.subIndexPrefix(sub)}${identifier}`;
   }
 
   /**
@@ -125,31 +136,28 @@ export class KVSessionStore extends SessionStore {
   /**
    * Persist session state and refresh its lookup indexes.
    *
-   * Writes the primary record (absolute TTL), a rolling activity marker
-   * (inactivity TTL), and — when available — `sid` and `sub` indexes used by
-   * {@link deleteByLogoutToken}.
+   * Writes the primary record plus — when available — the `sid` index and a
+   * per-session `sub` index entry used by {@link deleteByLogoutToken}. All writes
+   * share the absolute TTL and are independent, so they are issued in parallel.
    */
   async set(identifier: string, stateData: StateData): Promise<void> {
     const absoluteTtl = clampTtl(this.absoluteDuration);
-    const inactivityTtl = clampTtl(this.inactivityDuration);
-
-    await this.kv.put(this.sessionKey(identifier), JSON.stringify(stateData), {
-      expirationTtl: absoluteTtl,
-    });
-
-    await this.kv.put(this.activityKey(identifier), new Date().toISOString(), {
-      expirationTtl: inactivityTtl,
-    });
-
     const sid = readSid(stateData);
+    const sub = readSub(stateData);
+
+    const writes: Promise<void>[] = [
+      this.kv.put(this.sessionKey(identifier), JSON.stringify(stateData), { expirationTtl: absoluteTtl }),
+    ];
+
     if (sid) {
-      await this.kv.put(this.sidIndexKey(sid), identifier, { expirationTtl: absoluteTtl });
+      writes.push(this.kv.put(this.sidIndexKey(sid), identifier, { expirationTtl: absoluteTtl }));
     }
 
-    const sub = readSub(stateData);
     if (sub) {
-      await this.kv.put(this.subIndexKey(sub), identifier, { expirationTtl: absoluteTtl });
+      writes.push(this.kv.put(this.subIndexKey(sub, identifier), identifier, { expirationTtl: absoluteTtl }));
     }
+
+    await Promise.all(writes);
   }
 
   /**
@@ -159,31 +167,56 @@ export class KVSessionStore extends SessionStore {
   async delete(identifier: string): Promise<void> {
     const data = await this.get(identifier);
 
-    await this.kv.delete(this.sessionKey(identifier));
-    await this.kv.delete(this.activityKey(identifier));
+    const deletes: Promise<void>[] = [this.kv.delete(this.sessionKey(identifier))];
 
     if (data) {
       const sid = readSid(data);
       if (sid) {
-        await this.kv.delete(this.sidIndexKey(sid));
+        deletes.push(this.kv.delete(this.sidIndexKey(sid)));
       }
       const sub = readSub(data);
       if (sub) {
-        await this.kv.delete(this.subIndexKey(sub));
+        deletes.push(this.kv.delete(this.subIndexKey(sub, identifier)));
       }
     }
+
+    await Promise.all(deletes);
   }
 
   /**
-   * Invalidate a session in response to a Backchannel Logout token.
+   * List every session identifier currently indexed for a subject by paging
+   * through the `sub-index:<sub>:` prefix.
+   */
+  private async listSessionIdsForSub(sub: string): Promise<string[]> {
+    const prefix = this.subIndexPrefix(sub);
+    const identifiers: string[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const result = await this.kv.list({ prefix, cursor });
+      for (const { name } of result.keys) {
+        identifiers.push(name.slice(prefix.length));
+      }
+      cursor = result.list_complete ? undefined : result.cursor;
+    } while (cursor);
+
+    return identifiers;
+  }
+
+  /**
+   * Invalidate sessions in response to a Backchannel Logout token.
    *
-   * Resolution order:
-   * 1. `sid` claim → `sid-index:<sid>` → session identifier.
-   * 2. `sub` claim → `sub-index:<sub>` → session identifier (fallback).
+   * Resolution:
+   * 1. A `sid` claim resolves via `sid-index:<sid>` to a single session, which
+   *    is deleted.
+   * 2. A `sub` claim (whether or not `sid` resolved) resolves via the
+   *    `sub-index:<sub>:` prefix to ALL of that subject's sessions, each of which
+   *    is deleted — satisfying RFC 9700 §2.4, which requires a `sub`-only logout
+   *    token to terminate every session for the subject.
    *
-   * If neither index resolves, this is a no-op; the session's TTL guarantees
-   * eventual cleanup. `internal.sid` is populated by server-js when Auth0 issues
-   * a session with a `sid`, so sid-based invalidation applies to those sessions.
+   * Unresolved claims are a no-op; each session's TTL guarantees eventual
+   * cleanup. `internal.sid` is populated by server-js when Auth0 issues a session
+   * with a `sid`.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deleteByLogoutToken(claims: LogoutTokenClaims, c?: Context): Promise<void> {
@@ -191,16 +224,12 @@ export class KVSessionStore extends SessionStore {
       const identifier = await this.kv.get(this.sidIndexKey(claims.sid), { type: 'text' });
       if (typeof identifier === 'string') {
         await this.delete(identifier);
-        return;
       }
     }
 
     if (claims.sub) {
-      const identifier = await this.kv.get(this.subIndexKey(claims.sub), { type: 'text' });
-      if (typeof identifier === 'string') {
-        await this.delete(identifier);
-        return;
-      }
+      const identifiers = await this.listSessionIdsForSub(claims.sub);
+      await Promise.all(identifiers.map((identifier) => this.delete(identifier)));
     }
   }
 }

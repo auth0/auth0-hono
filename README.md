@@ -461,7 +461,7 @@ binding = "AUTH0_SESSIONS"
 id = "<your-kv-namespace-id>"
 ```
 
-The store keys sessions by identifier and maintains `sid` and `sub` indexes so BCLO logout tokens can be resolved to a session. All entries carry a TTL derived from the session's `absoluteDuration` / `inactivityDuration` (clamped to the Workers KV 60-second minimum), so stale sessions are cleaned up automatically. You can override the durations:
+The store keys sessions by identifier and maintains lookup indexes so BCLO logout tokens can be resolved: a `sid` maps to a single session, while a `sub` maps to **all** of that subject's sessions (one index entry per session), so a `sub`-only logout token terminates every session for the user, per RFC 9700 §2.4. All entries carry a TTL derived from `absoluteDuration` (clamped to the Workers KV 60-second minimum), so stale entries are cleaned up automatically even if an explicit delete is missed. Inactivity/absolute expiry itself is enforced by the SDK at the encrypted session-cookie layer, not by this store. You can override the durations:
 
 ```typescript
 new KVSessionStore(c.env.AUTH0_SESSIONS, {

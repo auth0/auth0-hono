@@ -7,11 +7,14 @@ function createMockKV(): KVNamespaceLike & {
   get: ReturnType<typeof vi.fn>;
   put: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  list: ReturnType<typeof vi.fn>;
 } {
   return {
     get: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
+    // Default: empty listing (overridden per-test as needed).
+    list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
   };
 }
 
@@ -25,6 +28,8 @@ function makeState(overrides?: Partial<StateData>): StateData {
     ...overrides,
   } as unknown as StateData;
 }
+
+const DAY = 60 * 60 * 24;
 
 describe('KVSessionStore', () => {
   let kv: ReturnType<typeof createMockKV>;
@@ -52,18 +57,22 @@ describe('KVSessionStore', () => {
   });
 
   describe('set', () => {
-    it('writes session, activity marker, sid-index and sub-index', async () => {
+    it('writes the session record, sid-index and per-session sub-index', async () => {
       const state = makeState();
       await store.set('id1', state);
 
       expect(kv.put).toHaveBeenCalledWith('session:id1', JSON.stringify(state), {
-        expirationTtl: 60 * 60 * 24 * 3,
+        expirationTtl: DAY * 3,
       });
-      expect(kv.put).toHaveBeenCalledWith('session-active:id1', expect.any(String), {
-        expirationTtl: 60 * 60 * 24,
-      });
-      expect(kv.put).toHaveBeenCalledWith('sid-index:sid-1', 'id1', { expirationTtl: 60 * 60 * 24 * 3 });
-      expect(kv.put).toHaveBeenCalledWith('sub-index:auth0|user1', 'id1', { expirationTtl: 60 * 60 * 24 * 3 });
+      expect(kv.put).toHaveBeenCalledWith('sid-index:sid-1', 'id1', { expirationTtl: DAY * 3 });
+      // Per-session sub index: key includes the identifier so multiple sessions coexist.
+      expect(kv.put).toHaveBeenCalledWith('sub-index:auth0|user1:id1', 'id1', { expirationTtl: DAY * 3 });
+    });
+
+    it('does not write an activity marker key', async () => {
+      await store.set('id1', makeState());
+      const activityWrite = kv.put.mock.calls.find((c) => String(c[0]).startsWith('session-active:'));
+      expect(activityWrite).toBeUndefined();
     });
 
     it('skips sid-index when internal.sid absent', async () => {
@@ -77,59 +86,87 @@ describe('KVSessionStore', () => {
       store = new KVSessionStore(kv, { absoluteDuration: 10, inactivityDuration: 5 });
       await store.set('id1', makeState());
       expect(kv.put).toHaveBeenCalledWith('session:id1', expect.any(String), { expirationTtl: 60 });
-      expect(kv.put).toHaveBeenCalledWith('session-active:id1', expect.any(String), { expirationTtl: 60 });
     });
 
     it('honors custom durations above the minimum', async () => {
       store = new KVSessionStore(kv, { absoluteDuration: 1000, inactivityDuration: 500 });
       await store.set('id1', makeState());
       expect(kv.put).toHaveBeenCalledWith('session:id1', expect.any(String), { expirationTtl: 1000 });
-      expect(kv.put).toHaveBeenCalledWith('session-active:id1', expect.any(String), { expirationTtl: 500 });
     });
   });
 
   describe('delete', () => {
-    it('removes session, activity marker, and both indexes', async () => {
+    it('removes the session record and both indexes', async () => {
       kv.get.mockResolvedValueOnce(makeState());
       await store.delete('id1');
       expect(kv.delete).toHaveBeenCalledWith('session:id1');
-      expect(kv.delete).toHaveBeenCalledWith('session-active:id1');
       expect(kv.delete).toHaveBeenCalledWith('sid-index:sid-1');
-      expect(kv.delete).toHaveBeenCalledWith('sub-index:auth0|user1');
+      expect(kv.delete).toHaveBeenCalledWith('sub-index:auth0|user1:id1');
     });
 
-    it('still deletes core keys when session record is gone', async () => {
+    it('does not delete an activity marker key', async () => {
+      kv.get.mockResolvedValueOnce(makeState());
+      await store.delete('id1');
+      const activityDelete = kv.delete.mock.calls.find((c) => String(c[0]).startsWith('session-active:'));
+      expect(activityDelete).toBeUndefined();
+    });
+
+    it('still deletes the session key when the record is gone', async () => {
       kv.get.mockResolvedValueOnce(null);
       await store.delete('id1');
       expect(kv.delete).toHaveBeenCalledWith('session:id1');
-      expect(kv.delete).toHaveBeenCalledWith('session-active:id1');
       const idxDelete = kv.delete.mock.calls.find((c) => String(c[0]).includes('-index:'));
       expect(idxDelete).toBeUndefined();
     });
   });
 
   describe('deleteByLogoutToken', () => {
-    it('resolves session by sid and deletes it', async () => {
-      // 1st get: sid-index lookup -> identifier; 2nd get: delete() reads session
+    it('resolves a session by sid and deletes it', async () => {
+      // sid-index lookup -> identifier; delete() then reads the session record.
       kv.get.mockResolvedValueOnce('id1').mockResolvedValueOnce(makeState());
       await store.deleteByLogoutToken({ sid: 'sid-1' });
       expect(kv.get).toHaveBeenCalledWith('sid-index:sid-1', { type: 'text' });
       expect(kv.delete).toHaveBeenCalledWith('session:id1');
     });
 
-    it('falls back to sub when sid index misses', async () => {
-      // sid lookup miss (null) -> sub lookup hit -> delete() reads session
-      kv.get
-        .mockResolvedValueOnce(null) // sid-index miss
-        .mockResolvedValueOnce('id2') // sub-index hit
-        .mockResolvedValueOnce(makeState()); // delete() get
-      await store.deleteByLogoutToken({ sid: 'sid-x', sub: 'auth0|user1' });
-      expect(kv.get).toHaveBeenCalledWith('sub-index:auth0|user1', { type: 'text' });
-      expect(kv.delete).toHaveBeenCalledWith('session:id2');
+    it('deletes ALL sessions for a sub-only logout token (RFC 9700 §2.4)', async () => {
+      // list() returns two sub-index keys → two sessions to delete.
+      kv.list.mockResolvedValueOnce({
+        keys: [{ name: 'sub-index:auth0|user1:idA' }, { name: 'sub-index:auth0|user1:idB' }],
+        list_complete: true,
+      });
+      // delete() reads each session record.
+      kv.get.mockResolvedValue(makeState());
+      await store.deleteByLogoutToken({ sub: 'auth0|user1' });
+      expect(kv.list).toHaveBeenCalledWith({ prefix: 'sub-index:auth0|user1:', cursor: undefined });
+      expect(kv.delete).toHaveBeenCalledWith('session:idA');
+      expect(kv.delete).toHaveBeenCalledWith('session:idB');
     });
 
-    it('is a graceful no-op when neither sid nor sub resolves', async () => {
-      kv.get.mockResolvedValue(null);
+    it('pages through the sub-index cursor until list_complete', async () => {
+      kv.list
+        .mockResolvedValueOnce({ keys: [{ name: 'sub-index:auth0|user1:idA' }], list_complete: false, cursor: 'c1' })
+        .mockResolvedValueOnce({ keys: [{ name: 'sub-index:auth0|user1:idB' }], list_complete: true });
+      kv.get.mockResolvedValue(makeState());
+      await store.deleteByLogoutToken({ sub: 'auth0|user1' });
+      expect(kv.list).toHaveBeenNthCalledWith(1, { prefix: 'sub-index:auth0|user1:', cursor: undefined });
+      expect(kv.list).toHaveBeenNthCalledWith(2, { prefix: 'sub-index:auth0|user1:', cursor: 'c1' });
+      expect(kv.delete).toHaveBeenCalledWith('session:idA');
+      expect(kv.delete).toHaveBeenCalledWith('session:idB');
+    });
+
+    it('deletes by sid and also sweeps sub sessions when both claims present', async () => {
+      // sid path: get sid-index -> 'idSid', delete() reads session.
+      kv.get.mockResolvedValueOnce('idSid').mockResolvedValue(makeState());
+      kv.list.mockResolvedValueOnce({ keys: [{ name: 'sub-index:auth0|user1:idB' }], list_complete: true });
+      await store.deleteByLogoutToken({ sid: 'sid-1', sub: 'auth0|user1' });
+      expect(kv.delete).toHaveBeenCalledWith('session:idSid');
+      expect(kv.delete).toHaveBeenCalledWith('session:idB');
+    });
+
+    it('is a graceful no-op when sid does not resolve and sub has no sessions', async () => {
+      kv.get.mockResolvedValue(null); // sid-index miss
+      kv.list.mockResolvedValueOnce({ keys: [], list_complete: true });
       await store.deleteByLogoutToken({ sid: 'x', sub: 'y' });
       expect(kv.delete).not.toHaveBeenCalled();
     });
@@ -137,6 +174,7 @@ describe('KVSessionStore', () => {
     it('is a no-op when claims carry neither sid nor sub', async () => {
       await store.deleteByLogoutToken({});
       expect(kv.get).not.toHaveBeenCalled();
+      expect(kv.list).not.toHaveBeenCalled();
       expect(kv.delete).not.toHaveBeenCalled();
     });
   });

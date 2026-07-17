@@ -3,6 +3,7 @@ import { accepts } from 'hono/accepts';
 import { Auth0Error } from '@/errors/Auth0Error.js';
 import { LoginRequiredError } from '@/errors/index.js';
 import { getClient } from '@/config/index.js';
+import { toSafeRedirect } from '@/utils/util.js';
 
 /**
  * Determine whether the request prefers an HTML response, mirroring the content
@@ -25,7 +26,9 @@ function prefersHtml(c: Context): boolean {
  *
  * Behavior:
  * - `LoginRequiredError` for an HTML request → 302 redirect to the configured
- *   login route (with `returnTo` preserved), driving the user into the login flow.
+ *   login route. The original path and query are preserved as `returnTo` when
+ *   they pass an open-redirect (same-origin) check. If the `auth0()` middleware
+ *   was never applied, the original error is re-thrown rather than masked.
  * - Any other `Auth0Error` (or `LoginRequiredError` for a JSON request) → a JSON
  *   body `{ error, error_description, statusCode }` using the error's own
  *   `status` (falling back to 500) and `code`.
@@ -45,13 +48,27 @@ export const auth0ErrorHandler: ErrorHandler = (err, c) => {
   }
 
   if (err instanceof LoginRequiredError && prefersHtml(c)) {
-    const { configuration } = getClient(c);
+    // getClient() throws if auth0() middleware was never applied. Guard so we
+    // surface the original error instead of masking it with a config error.
+    let configuration;
+    try {
+      ({ configuration } = getClient(c));
+    } catch {
+      throw err;
+    }
+
     const loginUrl = new URL(configuration.routes.login, configuration.baseURL);
-    loginUrl.searchParams.set('returnTo', new URL(c.req.url).pathname);
+    // Preserve the full path + query as returnTo, validated against the app's
+    // own origin to prevent open redirects.
+    const requestUrl = new URL(c.req.url);
+    const safeReturnTo = toSafeRedirect(requestUrl.pathname + requestUrl.search, configuration.baseURL);
+    if (safeReturnTo) {
+      loginUrl.searchParams.set('returnTo', new URL(safeReturnTo).pathname + new URL(safeReturnTo).search);
+    }
     return c.redirect(loginUrl.toString(), 302);
   }
 
-  const statusCode = err.status || 500;
+  const statusCode = err.status ?? 500;
   return c.json(
     {
       error: err.code,

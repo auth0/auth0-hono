@@ -97,7 +97,7 @@ describe('Auth Flow (end-to-end)', () => {
 
     app.get('/', (c) => c.text('Home'));
 
-    const response = await app.request('http://localhost/login', {
+    const response = await app.request('http://localhost/auth/login', {
       method: 'GET',
     });
 
@@ -187,7 +187,7 @@ describe('Auth Flow (end-to-end)', () => {
 
     app.use('*', auth0());
 
-    const response = await app.request('http://localhost/logout', {
+    const response = await app.request('http://localhost/auth/logout', {
       method: 'GET',
     });
 

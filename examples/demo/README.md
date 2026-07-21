@@ -19,7 +19,7 @@ You need a **Regular Web Application** in the [Auth0 Dashboard](https://manage.a
 
 | Setting               | Value                                 |
 | --------------------- | ------------------------------------- |
-| Allowed Callback URLs | `http://localhost:3000/callback` |
+| Allowed Callback URLs | `http://localhost:3000/auth/callback` |
 | Allowed Logout URLs   | `http://localhost:3000`               |
 
 Then create your environment file (copy from the provided example):
@@ -71,11 +71,11 @@ Open [http://localhost:3000](http://localhost:3000)
 | User claims                            | `c.var.auth0.user`                        | All authenticated pages                     |
 | Session inspection                     | `getSession(c)`                           | `/settings`                                 |
 | Access token retrieval                 | `getAccessToken(c)`                       | `/settings`                                 |
-| Login callback hook                    | `onCallback`                              | `/callback`                            |
+| Login callback hook                    | `onCallback`                              | `/auth/callback`                            |
 | Error handling                         | `LoginRequiredError`, `AccessDeniedError` | Global error handler                        |
 | Pushed Authorization Requests (PAR)    | `pushedAuthorizationRequests`             | auth-config.ts (via env)                    |
 | JWT Client Assertion (private_key_jwt) | `clientAssertionSigningKey`               | auth-config.ts (via env)                    |
-| Backchannel Logout (BCLO)              | `session.store`                           | auth-config.ts + `/backchannel-logout` |
+| Backchannel Logout (BCLO)              | `session.store`                           | auth-config.ts + `/auth/backchannel-logout` |
 
 ## Project Structure
 
@@ -159,7 +159,7 @@ The script prints to your terminal:
 **How it works:**
 
 - The demo enables BCLO with a stateful session store (required to look up sessions by Auth0's `sid` claim)
-- When Auth0 sends a backchannel logout notification to `/backchannel-logout`, the SDK validates the logout token
+- When Auth0 sends a backchannel logout notification to `/auth/backchannel-logout`, the SDK validates the logout token
 - The app's store immediately invalidates the matching session
 - The user is logged out on their next request
 
@@ -169,9 +169,9 @@ The script prints to your terminal:
   **cannot be tested against `http://localhost:3000`.** Use a deployed Workers URL
   or an HTTPS tunnel (e.g. `cloudflared tunnel` / `ngrok`).
 - Register the backchannel logout URI in the Auth0 Dashboard
-  (Applications > Your App > Sessions / Logout): `https://YOUR_PUBLIC_HOST/backchannel-logout`
+  (Applications > Your App > Sessions / Logout): `https://YOUR_PUBLIC_HOST/auth/backchannel-logout`
 - Login as a user, then trigger a logout for that user from the Auth0 Dashboard
-- Auth0 POSTs a `logout_token` to `/backchannel-logout`; the store invalidates the session
+- Auth0 POSTs a `logout_token` to `/auth/backchannel-logout`; the store invalidates the session
 - The user's next request shows them as unauthenticated
 
 **Store implementation:**

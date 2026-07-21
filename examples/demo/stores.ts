@@ -3,7 +3,7 @@
  *
  * ===== Backchannel Logout (BCLO) + Stateful Store =====
  * BCLO allows Auth0 to notify the app when a user session is terminated on Auth0
- * (logout, password reset, etc.). The SDK auto-mounts POST /backchannel-logout
+ * (logout, password reset, etc.). The SDK auto-mounts POST /auth/backchannel-logout
  * and validates the logout_token.
  *
  * However, invalidating a session by 'sid' (Session ID) requires a STATEFUL session

@@ -110,7 +110,7 @@ app.use('*', auth0())
 ```
 
 **What it handles automatically:**
-- Login/callback/logout routes (`/login`, `/callback`, `/logout`)
+- Login/callback/logout routes (`/auth/login`, `/auth/callback`, `/auth/logout`)
 - Backchannel logout
 - Session encryption and cookie management
 - User data available on every request via `c.var.auth0.user`
@@ -135,10 +135,10 @@ app.use('*', auth0())
   }
   authorizationParams?: Record<string, any> // Scope, audience, etc.
   routes?: {
-    login?: string                          // Default: '/login'
-    callback?: string                       // Default: '/callback'
-    logout?: string                         // Default: '/logout'
-    backchannelLogout?: string              // Default: '/backchannel-logout'
+    login?: string                          // Default: '/auth/login'
+    callback?: string                       // Default: '/auth/callback'
+    logout?: string                         // Default: '/auth/logout'
+    backchannelLogout?: string              // Default: '/auth/backchannel-logout'
   }
   onCallback?: (c, error, session) => ...   // Post-login hook (see Hooks below)
   attemptSilentLogin?: boolean              // Default: false
@@ -321,10 +321,10 @@ import {
 } from '@auth0/auth0-hono'
 
 // Mount handlers on default routes (or use custom routes)
-app.get('/login', handleLogin())
-app.get('/callback', handleCallback())
-app.get('/logout', handleLogout())
-app.post('/backchannel-logout', handleBackchannelLogout())
+app.get('/auth/login', handleLogin())
+app.get('/auth/callback', handleCallback())
+app.get('/auth/logout', handleLogout())
+app.post('/auth/backchannel-logout', handleBackchannelLogout())
 ```
 
 These resolve configuration from environment variables automatically.
@@ -340,7 +340,7 @@ app.use('*', auth0({
   async onCallback(c, error, session) {
     if (error) {
       // Error path: return custom error page or response
-      return c.redirect('/login?error=true')
+      return c.redirect('/auth/login?error=true')
     }
 
     // Success path: enrich session with custom data
@@ -394,7 +394,7 @@ app.onError((err, c) => {
   }
 
   if (err instanceof LoginRequiredError) {
-    return c.redirect('/login')
+    return c.redirect('/auth/login')
   }
 
   if (err instanceof InvalidGrantError) {

@@ -140,9 +140,9 @@ export function createMockConfig(overrides?: Record<string, any>): any {
     clientID: 'test_client_id',
     clientSecret: 'test_client_secret',
     routes: {
-      login: '/login',
-      callback: '/callback',
-      logout: '/logout',
+      login: '/auth/login',
+      callback: '/auth/callback',
+      logout: '/auth/logout',
     },
     session: {
       cookie: {

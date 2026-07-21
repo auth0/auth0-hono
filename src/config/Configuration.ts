@@ -82,9 +82,10 @@ export interface Configuration {
    * Routes options.
    *
    * @default {
-   *   login: '/login',
-   *   logout: '/logout',
-   *   callback: '/callback',
+   *   login: '/auth/login',
+   *   logout: '/auth/logout',
+   *   callback: '/auth/callback',
+   *   backchannelLogout: '/auth/backchannel-logout',
    * }
    */
   routes: Routes;

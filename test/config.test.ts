@@ -54,10 +54,10 @@ describe('Configuration Parser', () => {
     expect(parsedConfig).toHaveProperty('routes');
 
     expect(parsedConfig.routes).toEqual({
-      login: '/login',
-      logout: '/logout',
-      callback: '/callback',
-      backchannelLogout: '/backchannel-logout',
+      login: '/auth/login',
+      logout: '/auth/logout',
+      callback: '/auth/callback',
+      backchannelLogout: '/auth/backchannel-logout',
     });
   });
 
@@ -431,10 +431,10 @@ describe('Environment Configuration', () => {
       expect(parsedConfig.authRequired).toBe(true);
       expect(parsedConfig.clockTolerance).toBe(60);
       expect(parsedConfig.routes).toEqual({
-        login: '/login',
-        logout: '/logout',
-        callback: '/callback',
-        backchannelLogout: '/backchannel-logout',
+        login: '/auth/login',
+        logout: '/auth/logout',
+        callback: '/auth/callback',
+        backchannelLogout: '/auth/backchannel-logout',
       });
     });
   });

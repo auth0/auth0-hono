@@ -9,6 +9,8 @@ type Routes = {
   logout: string;
   backchannelLogout?: string;
   callback: string;
+  link?: string;
+  unlink?: string;
 };
 
 export interface Configuration {
@@ -86,6 +88,8 @@ export interface Configuration {
    *   logout: '/auth/logout',
    *   callback: '/auth/callback',
    *   backchannelLogout: '/auth/backchannel-logout',
+   *   link: '/auth/link',
+   *   unlink: '/auth/unlink',
    * }
    */
   routes: Routes;

@@ -76,7 +76,7 @@ export const ConfigurationSchema = z
     authRequired: z.boolean().optional().default(true),
     pushedAuthorizationRequests: z.boolean().optional().default(false),
     customRoutes: z
-      .array(z.enum(['login', 'callback', 'logout', 'backchannelLogout']))
+      .array(z.enum(['login', 'callback', 'logout', 'backchannelLogout', 'link', 'unlink']))
       .optional()
       .default([]),
     mountRoutes: z.boolean().optional().default(true),
@@ -90,6 +90,8 @@ export const ConfigurationSchema = z
         logout: z.string().regex(/^\//).optional().default('/auth/logout'),
         callback: z.string().regex(/^\//).optional().default('/auth/callback'),
         backchannelLogout: z.string().regex(/^\//).optional().default('/auth/backchannel-logout'),
+        link: z.string().regex(/^\//).optional().default('/auth/link'),
+        unlink: z.string().regex(/^\//).optional().default('/auth/unlink'),
       })
       .optional()
       .default({}),

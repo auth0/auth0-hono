@@ -43,8 +43,10 @@ exports[`Configuration Parser > should parse a valid configuration 1`] = `
   "routes": {
     "backchannelLogout": "/auth/backchannel-logout",
     "callback": "/auth/callback",
+    "link": "/auth/link",
     "login": "/auth/login",
     "logout": "/auth/logout",
+    "unlink": "/auth/unlink",
   },
   "session": {
     "absoluteDuration": 259200,

@@ -6,7 +6,16 @@ export { auth0 } from '@/auth.js';
 export { auth } from '@/auth.js';
 
 // Route handlers (standalone)
-export { handleLogin, handleLogout, handleCallback, handleBackchannelLogout } from '@/middleware/index.js';
+export {
+  handleLogin,
+  handleLogout,
+  handleCallback,
+  handleBackchannelLogout,
+  handleLinkUser,
+  handleLinkCallback,
+  handleUnlinkUser,
+  handleUnlinkCallback,
+} from '@/middleware/index.js';
 
 // Protection + Authorization middleware
 export { requiresAuth, requiresOrg, claimEquals, claimIncludes, claimCheck } from '@/middleware/index.js';
@@ -52,5 +61,10 @@ export type { OIDCEnv, OIDCVariables } from '@/lib/honoEnv.js';
 export { SessionStore } from '@/types/session.js';
 export { KVSessionStore } from '@/stores/KVSessionStore.js';
 export type { KVNamespaceLike, KVSessionStoreOptions } from '@/stores/KVSessionStore.js';
+export type { LinkUserParams } from '@/middleware/linkUser.js';
+export type { LinkCallbackParams } from '@/middleware/linkCallback.js';
+export type { UnlinkUserParams } from '@/middleware/unlinkUser.js';
+export type { UnlinkCallbackParams } from '@/middleware/unlinkCallback.js';
+export type { StartLinkUserOptions, StartUnlinkUserOptions } from '@auth0/auth0-server-js';
 export { type UserInfoResponse as UserInfo } from 'openid-client';
 export type { TokenEndpointResponse as TokenSet } from 'openid-client';

@@ -329,6 +329,46 @@ app.post('/auth/backchannel-logout', handleBackchannelLogout())
 
 These resolve configuration from environment variables automatically.
 
+## Account Linking
+
+Link or unlink a secondary identity provider connection to an authenticated user's account. When mounted via `auth0()`, the SDK auto-mounts four routes; each start route redirects the user to Auth0 to authorize, and Auth0 returns to the corresponding `/callback` sub-route to complete the operation. An active session is required — the start handlers throw `MissingSessionError` (401) when the user is not authenticated.
+
+| Route              | Default path                | Handler                 |
+| ------------------ | --------------------------- | ----------------------- |
+| Start link         | `/auth/link`                | `handleLinkUser()`      |
+| Complete link      | `/auth/link/callback`       | `handleLinkCallback()`  |
+| Start unlink       | `/auth/unlink`              | `handleUnlinkUser()`    |
+| Complete unlink    | `/auth/unlink/callback`     | `handleUnlinkCallback()`|
+
+With the `auth0()` middleware, the routes are mounted automatically. Pass the `connection` (and, for linking, `connectionScope`) as query parameters:
+
+```typescript
+app.use('*', auth0())
+
+// Link a Google account to the current user:
+//   GET /auth/link?connection=google-oauth2&connectionScope=openid%20profile%20email
+// Unlink it:
+//   GET /auth/unlink?connection=google-oauth2
+```
+
+Or mount the standalone handlers explicitly (e.g. to fix the connection or set a post-completion redirect):
+
+```typescript
+import {
+  handleLinkUser,
+  handleLinkCallback,
+  handleUnlinkUser,
+  handleUnlinkCallback
+} from '@auth0/auth0-hono'
+
+app.get('/auth/link', handleLinkUser({ connection: 'google-oauth2', connectionScope: 'openid profile email' }))
+app.get('/auth/link/callback', handleLinkCallback({ redirectAfterLinking: '/settings' }))
+app.get('/auth/unlink', handleUnlinkUser({ connection: 'google-oauth2' }))
+app.get('/auth/unlink/callback', handleUnlinkCallback({ redirectAfterUnlinking: '/settings' }))
+```
+
+Query parameters override any values passed to the handler. Errors surface as typed `Auth0Error`s (`start_link_user_error`, `build_link_user_url_error`, `build_unlink_user_url_error`) — see [Error Handling](#error-handling).
+
 ## Hooks
 
 ### `onCallback(c, error, session)`

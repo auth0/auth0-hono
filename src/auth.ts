@@ -13,9 +13,13 @@ import { OIDCEnv } from '@/lib/honoEnv.js';
 import {
   backchannelLogout as backchannelLogoutHandler,
   callback as callbackHandler,
+  linkCallback as linkCallbackHandler,
+  linkUser as linkUserHandler,
   login as loginHandler,
   logout as logoutHandler,
   requiresAuth,
+  unlinkCallback as unlinkCallbackHandler,
+  unlinkUser as unlinkUserHandler,
 } from '@/middleware/index.js';
 import { HonoCookieHandler } from '@/session/HonoCookieHandler.js';
 import { Auth0Context, Auth0Organization, Auth0Session, Auth0User } from '@/types/auth0.js';
@@ -113,7 +117,7 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
         // === ROUTE HANDLING ===
         // Check if this request matches a mounted auth route
         const { routes, mountRoutes } = config;
-        const { login, callback, logout, backchannelLogout } = routes;
+        const { login, callback, logout, backchannelLogout, link, unlink } = routes;
 
         // /auth/login
         if (mountRoutes && !config.customRoutes.includes('login') && c.req.path === login && c.req.method === 'GET') {
@@ -138,6 +142,26 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
           c.req.method === 'POST'
         ) {
           return backchannelLogoutHandler()(c, next);
+        }
+
+        // /auth/link
+        if (mountRoutes && !config.customRoutes.includes('link') && c.req.path === link && c.req.method === 'GET') {
+          return linkUserHandler()(c, next);
+        }
+
+        // /auth/link/callback
+        if (mountRoutes && !config.customRoutes.includes('link') && c.req.path === `${link}/callback`) {
+          return linkCallbackHandler()(c, next);
+        }
+
+        // /auth/unlink
+        if (mountRoutes && !config.customRoutes.includes('unlink') && c.req.path === unlink && c.req.method === 'GET') {
+          return unlinkUserHandler()(c, next);
+        }
+
+        // /auth/unlink/callback
+        if (mountRoutes && !config.customRoutes.includes('unlink') && c.req.path === `${unlink}/callback`) {
+          return unlinkCallbackHandler()(c, next);
         }
 
         // === EAGER SESSION LOADING & CONTEXT POPULATION ===

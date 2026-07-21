@@ -58,6 +58,8 @@ describe('Configuration Parser', () => {
       logout: '/auth/logout',
       callback: '/auth/callback',
       backchannelLogout: '/auth/backchannel-logout',
+      link: '/auth/link',
+      unlink: '/auth/unlink',
     });
   });
 
@@ -435,6 +437,8 @@ describe('Environment Configuration', () => {
         logout: '/auth/logout',
         callback: '/auth/callback',
         backchannelLogout: '/auth/backchannel-logout',
+        link: '/auth/link',
+        unlink: '/auth/unlink',
       });
     });
   });

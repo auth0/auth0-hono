@@ -110,7 +110,7 @@ app.use('*', auth0())
 ```
 
 **What it handles automatically:**
-- Login/callback/logout routes (`/auth/login`, `/auth/callback`, `/auth/logout`)
+- Login/callback/logout routes (`/login`, `/callback`, `/logout`)
 - Backchannel logout
 - Session encryption and cookie management
 - User data available on every request via `c.var.auth0.user`
@@ -135,10 +135,10 @@ app.use('*', auth0())
   }
   authorizationParams?: Record<string, any> // Scope, audience, etc.
   routes?: {
-    login?: string                          // Default: '/auth/login'
-    callback?: string                       // Default: '/auth/callback'
-    logout?: string                         // Default: '/auth/logout'
-    backchannelLogout?: string              // Default: '/auth/backchannel-logout'
+    login?: string                          // Default: '/login'
+    callback?: string                       // Default: '/callback'
+    logout?: string                         // Default: '/logout'
+    backchannelLogout?: string              // Default: '/backchannel-logout'
   }
   onCallback?: (c, error, session) => ...   // Post-login hook (see Hooks below)
   attemptSilentLogin?: boolean              // Default: false
@@ -320,11 +320,11 @@ import {
   handleBackchannelLogout
 } from '@auth0/auth0-hono'
 
-// Mount handlers on custom routes
+// Mount handlers on default routes (or use custom routes)
 app.get('/login', handleLogin())
-app.get('/logout', handleLogout())
 app.get('/callback', handleCallback())
-app.post('/logout-notify', handleBackchannelLogout())
+app.get('/logout', handleLogout())
+app.post('/backchannel-logout', handleBackchannelLogout())
 ```
 
 These resolve configuration from environment variables automatically.
@@ -394,7 +394,7 @@ app.onError((err, c) => {
   }
 
   if (err instanceof LoginRequiredError) {
-    return c.redirect('/auth/login')
+    return c.redirect('/login')
   }
 
   if (err instanceof InvalidGrantError) {
@@ -425,6 +425,10 @@ app.onError((err, c) => {
 | `MissingTransactionError` | 400 | `missing_transaction` | Callback without login transaction |
 | `TokenRefreshError` | 401 | `token_refresh_error` | Token refresh failed |
 | `ConnectionTokenError` | 401 | `connection_token_error` | Connection token request failed |
+| `Auth0Error` | 401 | `start_link_user_error` | Account linking initialization failed (no active session) |
+| `Auth0Error` | 500 | `backchannel_authentication_error` | CIBA authentication request failed |
+| `Auth0Error` | 500 | `build_link_user_url_error` | Failed to build account linking URL |
+| `Auth0Error` | 500 | `build_unlink_user_url_error` | Failed to build account unlinking URL |
 
 All errors respond with OAuth2-compliant JSON:
 

@@ -289,6 +289,52 @@ describe('Error Mapping (mapServerError)', () => {
     });
   });
 
+  describe('GA-relevant error mappings (CIBA and account linking)', () => {
+    it('should map start_link_user_error to Auth0Error with status 401', () => {
+      const serverError = new Error('Unable to start user linking without active session');
+      (serverError as any).code = 'start_link_user_error';
+
+      const mapped = mapServerError(serverError);
+
+      expect(mapped).toBeInstanceOf(Auth0Error);
+      expect(mapped.status).toBe(401);
+      expect(mapped.code).toBe('start_link_user_error');
+    });
+
+    it('should map backchannel_authentication_error to Auth0Error with status 500', () => {
+      const serverError = new Error('CIBA authentication failed');
+      (serverError as any).code = 'backchannel_authentication_error';
+
+      const mapped = mapServerError(serverError);
+
+      expect(mapped).toBeInstanceOf(Auth0Error);
+      expect(mapped.status).toBe(500);
+      expect(mapped.code).toBe('backchannel_authentication_error');
+    });
+
+    it('should map build_link_user_url_error to Auth0Error with status 500', () => {
+      const serverError = new Error('Failed to build link user URL');
+      (serverError as any).code = 'build_link_user_url_error';
+
+      const mapped = mapServerError(serverError);
+
+      expect(mapped).toBeInstanceOf(Auth0Error);
+      expect(mapped.status).toBe(500);
+      expect(mapped.code).toBe('build_link_user_url_error');
+    });
+
+    it('should map build_unlink_user_url_error to Auth0Error with status 500', () => {
+      const serverError = new Error('Failed to build unlink user URL');
+      (serverError as any).code = 'build_unlink_user_url_error';
+
+      const mapped = mapServerError(serverError);
+
+      expect(mapped).toBeInstanceOf(Auth0Error);
+      expect(mapped.status).toBe(500);
+      expect(mapped.code).toBe('build_unlink_user_url_error');
+    });
+  });
+
   describe('unmapped error codes default to Auth0Error', () => {
     it('should map unknown error code to Auth0Error with status 500', () => {
       const serverError = new Error('Some unknown error');

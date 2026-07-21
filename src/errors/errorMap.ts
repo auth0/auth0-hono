@@ -44,7 +44,7 @@ export function mapServerError(err: unknown): Auth0Error {
   const errorObject = err as { code?: string; cause?: { error?: string } };
   const causeError = errorObject.cause?.error;
 
-  // Map by error code per server-js documentation
+  // Map by error code per server-js and auth-js documentation
   switch (errorObject.code) {
     case 'missing_transaction_error':
       return new MissingTransactionError(
@@ -77,6 +77,26 @@ export function mapServerError(err: unknown): Auth0Error {
 
     case 'token_for_connection_error':
       return new ConnectionTokenError('Failed to get token for connection.', err);
+
+    case 'start_link_user_error':
+      return new Auth0Error('Failed to start user linking process', 401, 'start_link_user_error', {
+        cause: err,
+      });
+
+    case 'backchannel_authentication_error':
+      return new Auth0Error('Backchannel authentication failed', 500, 'backchannel_authentication_error', {
+        cause: err,
+      });
+
+    case 'build_link_user_url_error':
+      return new Auth0Error('Failed to build user linking URL', 500, 'build_link_user_url_error', {
+        cause: err,
+      });
+
+    case 'build_unlink_user_url_error':
+      return new Auth0Error('Failed to build user unlinking URL', 500, 'build_unlink_user_url_error', {
+        cause: err,
+      });
 
     case 'backchannel_logout_error':
     case 'verify_logout_token_error':

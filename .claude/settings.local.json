@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cp ~/.claude/skills/auth0-hono/references/setup.md ~/src/agent-skills/plugins/auth0/skills/auth0-hono/references/setup.md)",
-      "Bash(cp ~/.claude/skills/auth0-hono/references/integration.md ~/src/agent-skills/plugins/auth0/skills/auth0-hono/references/integration.md)",
-      "Bash(cp ~/.claude/skills/auth0-hono/references/api.md ~/src/agent-skills/plugins/auth0/skills/auth0-hono/references/api.md)"
-    ]
-  }
-}

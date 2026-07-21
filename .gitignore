@@ -150,3 +150,15 @@ examples/**/.dev.vars
 
 forge/
 .forge/
+
+# Local editor / OS / agent artifacts
+.claude/
+.DS_Store
+.github/test-events/
+
+# Local drafts (blog / video / audit scratch)
+*.docx
+BLOG-DRAFT-*
+VIDEO-SCRIPT-*
+blog-writing-style.md
+SECURITY-AUDIT.md

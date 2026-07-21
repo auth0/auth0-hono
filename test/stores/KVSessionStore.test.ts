@@ -155,12 +155,23 @@ describe('KVSessionStore', () => {
       expect(kv.delete).toHaveBeenCalledWith('session:idB');
     });
 
-    it('deletes by sid and also sweeps sub sessions when both claims present', async () => {
+    it('revokes only the sid session when both claims present (RFC 9700 §2.4)', async () => {
       // sid path: get sid-index -> 'idSid', delete() reads session.
       kv.get.mockResolvedValueOnce('idSid').mockResolvedValue(makeState());
       kv.list.mockResolvedValueOnce({ keys: [{ name: 'sub-index:auth0|user1:idB' }], list_complete: true });
       await store.deleteByLogoutToken({ sid: 'sid-1', sub: 'auth0|user1' });
+      // RFC 9700 §2.4: when sid resolves, revoke ONLY that session — do not
+      // sweep every session for the subject.
       expect(kv.delete).toHaveBeenCalledWith('session:idSid');
+      expect(kv.delete).not.toHaveBeenCalledWith('session:idB');
+      expect(kv.list).not.toHaveBeenCalled();
+    });
+
+    it('falls back to sub sweep when sid is present but does not resolve', async () => {
+      // sid-index miss -> null, then delete() reads each session record.
+      kv.get.mockResolvedValueOnce(null).mockResolvedValue(makeState());
+      kv.list.mockResolvedValueOnce({ keys: [{ name: 'sub-index:auth0|user1:idB' }], list_complete: true });
+      await store.deleteByLogoutToken({ sid: 'sid-1', sub: 'auth0|user1' });
       expect(kv.delete).toHaveBeenCalledWith('session:idB');
     });
 

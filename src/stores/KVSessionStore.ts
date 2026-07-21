@@ -32,9 +32,10 @@ export interface KVSessionStoreOptions {
    */
   absoluteDuration?: number;
   /**
-   * Inactivity window in seconds for the rolling activity marker.
-   *
-   * Default: 86400 (1 day), matching the SDK session default.
+   * @deprecated No longer used by the store. Inactivity (rolling/idle
+   * expiration) is enforced at the SDK layer, not in KV. This option is
+   * accepted for backward compatibility but has no effect; setting it will
+   * not change session TTLs. It will be removed in a future major version.
    */
   inactivityDuration?: number;
 }
@@ -42,7 +43,6 @@ export interface KVSessionStoreOptions {
 /** Cloudflare Workers KV enforces a minimum `expirationTtl` of 60 seconds. */
 const KV_MIN_TTL_SECONDS = 60;
 const DEFAULT_ABSOLUTE_DURATION = 60 * 60 * 24 * 3; // 3 days
-const DEFAULT_INACTIVITY_DURATION = 60 * 60 * 24; // 1 day
 
 /** Clamp a requested TTL to the Workers KV minimum. */
 function clampTtl(seconds: number): number {
@@ -99,13 +99,11 @@ function readSub(stateData: StateData): string | undefined {
 export class KVSessionStore extends SessionStore {
   private readonly kv: KVNamespaceLike;
   private readonly absoluteDuration: number;
-  private readonly inactivityDuration: number;
 
   constructor(kv: KVNamespaceLike, options: KVSessionStoreOptions = {}) {
     super();
     this.kv = kv;
     this.absoluteDuration = options.absoluteDuration ?? DEFAULT_ABSOLUTE_DURATION;
-    this.inactivityDuration = options.inactivityDuration ?? DEFAULT_INACTIVITY_DURATION;
   }
 
   private sessionKey(identifier: string): string {
@@ -224,9 +222,13 @@ export class KVSessionStore extends SessionStore {
       const identifier = await this.kv.get(this.sidIndexKey(claims.sid), { type: 'text' });
       if (typeof identifier === 'string') {
         await this.delete(identifier);
+        // RFC 9700 §2.4: when `sid` is present the RP MUST revoke only the
+        // session identified by `sid`, not every session for the subject.
+        return;
       }
     }
 
+    // Reached only when `sid` was absent or did not resolve to a session.
     if (claims.sub) {
       const identifiers = await this.listSessionIdsForSub(claims.sub);
       await Promise.all(identifiers.map((identifier) => this.delete(identifier)));

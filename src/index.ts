@@ -10,6 +10,10 @@ export { handleLogin, handleLogout, handleCallback, handleBackchannelLogout } fr
 
 // Protection + Authorization middleware
 export { requiresAuth, requiresOrg, claimEquals, claimIncludes, claimCheck } from '@/middleware/index.js';
+export { requiresScopes, requiresPermissions } from '@/middleware/requiresScopes.js';
+
+// Error handler for app.onError()
+export { auth0ErrorHandler } from '@/middleware/auth0ErrorHandler.js';
 
 // Silent login
 export { attemptSilentLogin, cancelSilentLogin, resumeSilentLogin } from '@/middleware/index.js';
@@ -22,7 +26,7 @@ export { pauseSilentLogin } from '@/middleware/silentLogin.js';
 export { getSession } from '@/helpers/sessionCache.js';
 export { getUser, updateSession } from '@/helpers/session.js';
 export { getAccessToken } from '@/helpers/getAccessToken.js';
-export type { Auth0TokenSet } from '@/helpers/getAccessToken.js';
+export type { Auth0TokenSet, GetAccessTokenOptions } from '@/helpers/getAccessToken.js';
 export { getAccessTokenForConnection } from '@/helpers/getAccessTokenForConnection.js';
 export type { GetAccessTokenForConnectionOptions } from '@/helpers/getAccessTokenForConnection.js';
 
@@ -46,5 +50,7 @@ export {
 export type { Auth0Context, Auth0User, Auth0Organization, Auth0Session } from '@/types/auth0.js';
 export type { OIDCEnv, OIDCVariables } from '@/lib/honoEnv.js';
 export { SessionStore } from '@/types/session.js';
+export { KVSessionStore } from '@/stores/KVSessionStore.js';
+export type { KVNamespaceLike, KVSessionStoreOptions } from '@/stores/KVSessionStore.js';
 export { type UserInfoResponse as UserInfo } from 'openid-client';
 export type { TokenEndpointResponse as TokenSet } from 'openid-client';

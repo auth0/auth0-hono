@@ -1,4 +1,5 @@
 import { getClient } from '@/config/index.js';
+import { Auth0Error } from '@/errors/Auth0Error.js';
 import { mapServerError } from '@/errors/errorMap.js';
 import { REFRESH_CACHE_KEY } from '@/lib/constants.js';
 import { TokenSet } from '@auth0/auth0-server-js';
@@ -9,6 +10,52 @@ import { invalidateSessionCache } from './sessionCache.js';
  * Re-export server-js TokenSet as public return type.
  */
 export type Auth0TokenSet = TokenSet;
+
+/**
+ * Options for {@link getAccessToken}.
+ *
+ * All fields are optional; omitting the options object preserves the original
+ * single-audience behavior exactly.
+ */
+export interface GetAccessTokenOptions {
+  /**
+   * Target audience for the access token.
+   *
+   * The underlying `@auth0/auth0-server-js` client binds its audience once, at
+   * construction time (from `authorizationParams.audience`), and does not accept
+   * a per-call audience. To fail loud rather than silently return a token for the
+   * wrong audience, passing an `audience` that differs from the configured one
+   * throws an {@link Auth0Error} with code `unsupported_audience_override`.
+   * Passing the same audience as configured (or omitting it) is always allowed.
+   */
+  audience?: string;
+  /**
+   * Scope hint used to partition the per-request token cache. Distinct scopes are
+   * cached separately so callers requesting different scopes never share a cached
+   * token. Note: the server-js client determines the scope actually requested;
+   * this value affects cache keying, not the upstream token request.
+   */
+  scope?: string;
+  /**
+   * When `true`, bypass any cached in-flight token for this key and force a fresh
+   * `getAccessToken` call. Default: `false`.
+   */
+  refresh?: boolean;
+}
+
+/**
+ * Compute the per-request refresh-cache key for the given options.
+ *
+ * No options (or neither audience nor scope) → `'__default__'`, preserving the
+ * original cache key so existing callers hit the same entry. Otherwise the key
+ * is `"<audience>:<scope>"` so distinct audience/scope pairs are isolated.
+ */
+function computeCacheKey(options?: GetAccessTokenOptions): string {
+  if (!options || (!options.audience && !options.scope)) {
+    return '__default__';
+  }
+  return `${options.audience ?? ''}:${options.scope ?? ''}`;
+}
 
 /**
  * Get an access token, auto-refreshing if expired.
@@ -43,14 +90,33 @@ export type Auth0TokenSet = TokenSet;
  * @see getAccessTokenForConnection - Get token for a specific connection/provider
  * @see updateSession - Merge custom data into session
  */
-export async function getAccessToken(c: Context): Promise<Auth0TokenSet> {
-  const { client } = getClient(c);
+export async function getAccessToken(c: Context, options?: GetAccessTokenOptions): Promise<Auth0TokenSet> {
+  const { client, configuration } = getClient(c);
 
-  // Single cache key — server-js only supports one audience per client instance
-  const cacheKey = '__default__';
+  // Fail loud on a per-call audience that differs from the configured one:
+  // server-js binds audience per client instance, so we cannot honor an override.
+  if (options?.audience) {
+    const configuredAudience = configuration.authorizationParams?.audience;
+    if (options.audience !== configuredAudience) {
+      throw new Auth0Error(
+        'Per-call audience override is not supported',
+        400,
+        'unsupported_audience_override',
+        {
+          description: `The requested audience "${options.audience}" does not match the configured audience${
+            configuredAudience ? ` "${configuredAudience}"` : ''
+          }. Configure authorizationParams.audience on the auth0() middleware instead.`,
+        }
+      );
+    }
+  }
+
+  // Cache key: '__default__' preserves original behavior for option-less calls;
+  // otherwise partition by audience/scope so tokens never bleed across keys.
+  const cacheKey = computeCacheKey(options);
 
   // NOTE: This cache uses non-atomic read-modify-write on Map.
-  // Under extreme concurrency, two requests for same audience could both miss cache
+  // Under extreme concurrency, two requests for same key could both miss cache
   // and create duplicate refresh promises. This is acceptable because:
   // 1. Both promises resolve to same token (idempotent)
   // 2. Extra refresh work is wasteful but not incorrect
@@ -66,7 +132,6 @@ export async function getAccessToken(c: Context): Promise<Auth0TokenSet> {
     // Either no cache or invalid type: create new Map
     if (cached && !(cached instanceof Map)) {
       // Log that cache was invalid type (helps debug conflicts)
-      const { configuration } = getClient(c);
       configuration.debug(`Cache key collision detected: ${REFRESH_CACHE_KEY} was not a Map, creating new cache`);
     }
 
@@ -76,7 +141,12 @@ export async function getAccessToken(c: Context): Promise<Auth0TokenSet> {
     refreshCache = cached;
   }
 
-  // Check if another handler is already refreshing this audience
+  // Force-refresh: drop any in-flight/cached promise for this key first.
+  if (options?.refresh) {
+    refreshCache.delete(cacheKey);
+  }
+
+  // Check if another handler is already refreshing this key
   let promise = refreshCache.get(cacheKey);
   if (!promise) {
     // No in-flight refresh — create new promise

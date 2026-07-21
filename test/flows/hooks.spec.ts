@@ -74,7 +74,7 @@ describe('onCallback Hook', () => {
 
     mockContext = createMockContext({
       req: {
-        url: 'https://app.test.com/auth/callback?code=test_code&state=test_state',
+        url: 'https://app.test.com/callback?code=test_code&state=test_state',
         method: 'GET',
       },
     });

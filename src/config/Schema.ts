@@ -86,10 +86,10 @@ export const ConfigurationSchema = z
       .default(() => () => {}),
     routes: z
       .object({
-        login: z.string().regex(/^\//).optional().default('/auth/login'),
-        logout: z.string().regex(/^\//).optional().default('/auth/logout'),
-        callback: z.string().regex(/^\//).optional().default('/auth/callback'),
-        backchannelLogout: z.string().regex(/^\//).optional().default('/auth/backchannel-logout'),
+        login: z.string().regex(/^\//).optional().default('/login'),
+        logout: z.string().regex(/^\//).optional().default('/logout'),
+        callback: z.string().regex(/^\//).optional().default('/callback'),
+        backchannelLogout: z.string().regex(/^\//).optional().default('/backchannel-logout'),
       })
       .optional()
       .default({}),

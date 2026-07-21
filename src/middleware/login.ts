@@ -88,8 +88,8 @@ const BLOCKED_FORWARD_PARAMS = new Set([
  * server-js additionally merges ServerClientOptions.authorizationParams (constructor)
  * as the base under all of the above.
  *
- * This allows patterns like: `/auth/login?audience=https://api2.example.com&login_hint=user@example.com`
- * while preventing: `/auth/login?response_type=token&redirect_uri=https://evil.com`
+ * This allows patterns like: `/login?audience=https://api2.example.com&login_hint=user@example.com`
+ * while preventing: `/login?response_type=token&redirect_uri=https://evil.com`
  */
 export const login = (params: LoginParams = {}) => {
   return createMiddleware<OIDCEnv>(async function (c) {

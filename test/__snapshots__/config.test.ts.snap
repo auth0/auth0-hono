@@ -41,10 +41,10 @@ exports[`Configuration Parser > should parse a valid configuration 1`] = `
   "mountRoutes": true,
   "pushedAuthorizationRequests": false,
   "routes": {
-    "backchannelLogout": "/auth/backchannel-logout",
-    "callback": "/auth/callback",
-    "login": "/auth/login",
-    "logout": "/auth/logout",
+    "backchannelLogout": "/backchannel-logout",
+    "callback": "/callback",
+    "login": "/login",
+    "logout": "/logout",
   },
   "session": {
     "absoluteDuration": 259200,

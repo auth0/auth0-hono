@@ -24,7 +24,7 @@ import { Auth0Context, Auth0Organization, Auth0Session, Auth0User } from '@/type
  * Main Auth0 OIDC middleware.
  *
  * Initializes the Auth0 OIDC client on first request (lazy singleton pattern).
- * Handles standard OIDC routes (/auth/login, /auth/callback, etc.).
+ * Handles standard OIDC routes (/login, /callback, /logout, etc.).
  * Eagerly loads session and populates c.var.auth0 on every request.
  *
  * @param initConfig - Optional explicit configuration (overrides env vars)
@@ -63,9 +63,9 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
   //   import { handleLogin, handleCallback, handleLogout, ensureClient } from '@auth0/auth0-hono';
   //
   //   // Each request reads its own env bindings via ensureClient(c)
-  //   app.get('/auth/login', handleLogin())
-  //   app.get('/auth/callback', handleCallback())
-  //   app.get('/auth/logout', handleLogout())
+  //   app.get('/login', handleLogin())
+  //   app.get('/callback', handleCallback())
+  //   app.get('/logout', handleLogout())
   //   ```
   //
   //   ensureClient(c) reads env(c) per-request, so each tenant gets its own config.
@@ -115,22 +115,22 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
         const { routes, mountRoutes } = config;
         const { login, callback, logout, backchannelLogout } = routes;
 
-        // /auth/login
+        // /login
         if (mountRoutes && !config.customRoutes.includes('login') && c.req.path === login && c.req.method === 'GET') {
           return loginHandler()(c, next);
         }
 
-        // /auth/callback
+        // /callback
         if (mountRoutes && !config.customRoutes.includes('callback') && c.req.path === callback) {
           return callbackHandler()(c, next);
         }
 
-        // /auth/logout
+        // /logout
         if (mountRoutes && !config.customRoutes.includes('logout') && c.req.path === logout && c.req.method === 'GET') {
           return logoutHandler()(c, next);
         }
 
-        // /auth/backchannel-logout
+        // /backchannel-logout
         if (
           mountRoutes &&
           !config.customRoutes.includes('backchannelLogout') &&

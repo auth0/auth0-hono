@@ -84,7 +84,7 @@ describe('auth0ErrorHandler', () => {
     const res = (await auth0ErrorHandler(err, ctx as any)) as Response;
     expect(res.status).toBe(302);
     const location = res.headers.get('location');
-    expect(location).toContain('/auth/login');
+    expect(location).toContain('/login');
     expect(location).toContain('returnTo=%2Fprotected');
   });
 

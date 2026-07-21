@@ -1,0 +1,13 @@
+{
+  "action": "closed",
+  "pull_request": {
+    "merged": true,
+    "head": {
+      "ref": "release/v2.0.0-beta.0"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "body": "## [v2.0.0-beta.0] Test release notes\n\n**Added**\n- feat: beta release"
+  }
+}

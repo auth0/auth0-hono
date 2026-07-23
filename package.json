@@ -42,7 +42,7 @@
     "@commitlint/config-conventional": "^19.2.2",
     "@eslint/compat": "^1.2.8",
     "@eslint/js": "^9.24.0",
-    "@hono/node-server": "^1.14.1",
+    "@hono/node-server": "^2.0.10",
     "@types/debug": "^4.1.12",
     "@types/node": "^20.11.26",
     "@typescript-eslint/eslint-plugin": "^8.29.1",

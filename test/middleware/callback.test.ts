@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import { getClient } from '../../src/config';
 import { callback } from '../../src/middleware/callback';
 import { deleteSilentLoginCookie } from '../../src/middleware/silentLogin';
-import { createRouteUrl } from '../../src/utils/util';
+import { createCallbackUrl } from '../../src/utils/util';
 
 // Mock dependencies
 vi.mock('../../src/config', () => ({
@@ -12,7 +12,7 @@ vi.mock('../../src/config', () => ({
 }));
 
 vi.mock('../../src/utils/util', () => ({
-  createRouteUrl: vi.fn(),
+  createCallbackUrl: vi.fn(),
   toSafeRedirect: vi.fn((url) => url), // Mock toSafeRedirect to return the input
 }));
 
@@ -73,8 +73,8 @@ describe('callback middleware', () => {
       configuration: mockConfiguration,
     });
 
-    // Setup createRouteUrl mock
-    (createRouteUrl as Mock).mockReturnValue('https://app.example.com/callback?code=mock-code&state=mock-state');
+    // Setup createCallbackUrl mock
+    (createCallbackUrl as Mock).mockReturnValue('https://app.example.com/callback?code=mock-code&state=mock-state');
   });
 
   afterEach(() => {
@@ -204,6 +204,42 @@ describe('callback middleware', () => {
     it('should throw the error', () => {
       expect(err).toBeDefined();
       expect(err.message).toBe('The authorization code is invalid or expired');
+    });
+  });
+
+  describe('when behind a reverse proxy with wrong protocol/host', () => {
+    beforeEach(async () => {
+      // Simulate request seen by Hono as http (from proxy) with internal host
+      mockContext.req.url = 'http://internal-host:8080/callback?code=auth-code&state=state-value';
+
+      // createCallbackUrl should be called to use baseURL's origin instead
+      (createCallbackUrl as Mock).mockReturnValue(
+        'https://app.example.com/callback?code=auth-code&state=state-value'
+      );
+
+      mockClient.completeInteractiveLogin.mockResolvedValue({
+        appState: { returnTo: '/' },
+      });
+
+      await callback()(mockContext, nextFn);
+    });
+
+    it('should call createCallbackUrl with request URL and baseURL', () => {
+      expect(createCallbackUrl).toHaveBeenCalledWith('http://internal-host:8080/callback?code=auth-code&state=state-value', 'https://app.example.com');
+    });
+
+    it('should pass the corrected URL (with baseURL origin) to completeInteractiveLogin', () => {
+      expect(mockClient.completeInteractiveLogin).toHaveBeenCalledWith(
+        'https://app.example.com/callback?code=auth-code&state=state-value',
+        mockContext
+      );
+    });
+
+    it('should ensure redirect_uri protocol matches baseURL (https not http)', () => {
+      const callArgs = (mockClient.completeInteractiveLogin as Mock).mock.calls[0];
+      const urlPassedToClient = callArgs[0];
+      expect(urlPassedToClient).toMatch(/^https:\/\/app\.example\.com/);
+      expect(urlPassedToClient).not.toMatch(/^http:\/\//);
     });
   });
 });

@@ -40,7 +40,7 @@ export interface Configuration {
 
   /**
    * Whether to use the IDP's logout endpoint.
-   * @default false
+   * @default true
    */
   idpLogout: boolean;
 

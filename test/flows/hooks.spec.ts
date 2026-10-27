@@ -16,6 +16,7 @@ vi.mock('../../src/config/index', () => ({
 
 vi.mock('../../src/utils/util', () => ({
   createRouteUrl: vi.fn((url) => url),
+  createCallbackUrl: vi.fn((url) => url),
   toSafeRedirect: vi.fn((url) => url),
 }));
 

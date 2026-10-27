@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@auth0/auth0-server-js": "^1.0.3",
-    "zod": "^3.24.4"
+    "zod": "^4.0.0"
   },
   "peerDependencies": {
     "hono": ">=3.0.0"

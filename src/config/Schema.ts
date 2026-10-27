@@ -15,7 +15,7 @@ const createAuthParamsSchema = () => {
         .default('openid profile email'),
       response_mode: z.string().optional(),
     })
-    .passthrough();
+    .loose();
 };
 
 // Create the configuration schema
@@ -39,17 +39,16 @@ export const ConfigurationSchema = z
           sameSite: z.enum(['lax', 'strict', 'none']).optional().default('lax'),
           secure: z.boolean().optional(),
         })
-        .optional()
-        .default({
+        .prefault({
           name: 'appSession',
           sameSite: 'lax',
         }),
     }),
-    tokenEndpointParams: z.record(z.any()).optional(),
-    authorizationParams: createAuthParamsSchema().optional().default({}),
+    tokenEndpointParams: z.record(z.string(), z.any()).optional(),
+    authorizationParams: createAuthParamsSchema().prefault({}),
     forwardAuthorizationParams: z.array(z.string()).optional().default([]),
-    logoutParams: z.record(z.any()).optional(),
-    baseURL: z.string().url(),
+    logoutParams: z.record(z.string(), z.any()).optional(),
+    baseURL: z.url(),
     clientID: z.string(),
     clientSecret: z.string().optional(),
     clockTolerance: z.number().optional().default(60),
@@ -64,7 +63,7 @@ export const ConfigurationSchema = z
     idTokenSigningAlg: z
       .string()
       .refine((val) => val.toLowerCase() !== 'none', {
-        message: "Signing algorithm cannot be 'none'",
+        error: "Signing algorithm cannot be 'none'",
       })
       .optional()
       .default('RS256'),
@@ -91,8 +90,7 @@ export const ConfigurationSchema = z
         callback: z.string().regex(/^\//).optional().default('/auth/callback'),
         backchannelLogout: z.string().regex(/^\//).optional().default('/auth/backchannel-logout'),
       })
-      .optional()
-      .default({}),
+      .prefault({}),
     clientAuthMethod: z
       .enum(['client_secret_basic', 'client_secret_post', 'client_secret_jwt', 'private_key_jwt', 'none'])
       .optional(),
@@ -156,7 +154,7 @@ export const ConfigurationSchema = z
       if (isHttps.test(data.baseURL)) {
         if (cookie.secure === false) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message:
               "Setting your cookie to insecure when over https is not recommended, I hope you know what you're doing.",
             path: ['session', 'cookie', 'secure'],
@@ -165,7 +163,7 @@ export const ConfigurationSchema = z
       } else if (cookie.secure === true) {
         // Error for HTTP with secure cookie
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: "Cookies set with the `Secure` property won't be attached to http requests",
           path: ['session', 'cookie', 'secure'],
         });
@@ -180,18 +178,18 @@ export const ConfigurationSchema = z
       if (responseType === 'code') {
         if (responseMode && !['query', 'form_post'].includes(responseMode)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.invalid_enum_value,
-            options: ['query', 'form_post'],
-            received: responseMode,
+            code: 'invalid_value',
+            values: ['query', 'form_post'],
+            input: responseMode,
             message: "For response_type 'code', response_mode must be 'query' or 'form_post'",
             path: ['authorizationParams', 'response_mode'],
           });
         }
       } else if (responseMode && responseMode !== 'form_post') {
         ctx.addIssue({
-          code: z.ZodIssueCode.invalid_enum_value,
-          options: ['form_post'],
-          received: responseMode,
+          code: 'invalid_value',
+          values: ['form_post'],
+          input: responseMode,
           message: "For this response_type, response_mode must be 'form_post'",
           path: ['authorizationParams', 'response_mode'],
         });
@@ -200,7 +198,7 @@ export const ConfigurationSchema = z
       // Warning about form_post with HTTP baseURL
       if (data.authorizationParams.response_mode === 'form_post' && !isHttps.test(data.baseURL)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message:
             "Using 'form_post' for response_mode may cause issues for you logging in over http, see https://github.com/auth0/express-openid-connect/blob/master/FAQ.md",
           path: ['baseURL'],
@@ -211,7 +209,7 @@ export const ConfigurationSchema = z
     // Validate clientSecret requirements
     if (data.clientAuthMethod && data.clientAuthMethod.includes('client_secret') && !data.clientSecret) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: `"clientSecret" is required for the "clientAuthMethod" "${data.clientAuthMethod}"`,
         path: ['clientSecret'],
       });
@@ -219,7 +217,7 @@ export const ConfigurationSchema = z
 
     if (data.idTokenSigningAlg && data.idTokenSigningAlg.startsWith('HS') && !data.clientSecret) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: '"clientSecret" is required for ID tokens with HMAC based algorithms',
         path: ['clientSecret'],
       });
@@ -228,7 +226,7 @@ export const ConfigurationSchema = z
     // Validate clientAuthMethod
     if (data.authorizationParams?.response_type?.includes('code') && data.clientAuthMethod === 'none') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: 'Public code flow clients are not supported.',
         path: ['clientAuthMethod'],
       });
@@ -236,7 +234,7 @@ export const ConfigurationSchema = z
 
     if (data.pushedAuthorizationRequests && data.clientAuthMethod === 'none') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: 'Public PAR clients are not supported.',
         path: ['clientAuthMethod'],
       });
@@ -245,7 +243,7 @@ export const ConfigurationSchema = z
     // Validate clientAssertionSigningKey
     if (data.clientAuthMethod === 'private_key_jwt' && !data.clientAssertionSigningKey) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: '"clientAssertionSigningKey" is required for a "clientAuthMethod" of "private_key_jwt"',
         path: ['clientAssertionSigningKey'],
       });

@@ -8,16 +8,16 @@ import { Auth0Error } from '@/errors/Auth0Error.js';
 
 const StateDataSchema = z
   .object({
-    user: z.record(z.any()),
+    user: z.record(z.string(), z.any()),
     idToken: z.string().optional(),
     tokenSets: z.array(z.any()),
     internal: z
       .object({
         createdAt: z.number(),
       })
-      .passthrough(),
+      .loose(),
   })
-  .passthrough();
+  .loose();
 
 /**
  * Validate StateData contains required fields.
@@ -30,7 +30,7 @@ const StateDataSchema = z
 function validateStateDataShape(data: unknown): asserts data is StateData {
   const result = StateDataSchema.safeParse(data);
   if (!result.success) {
-    const issue = result.error.errors[0];
+    const issue = result.error.issues[0];
     const path = issue.path.join('.');
     const message = path
       ? `Invalid session state: ${path} — ${issue.message}`

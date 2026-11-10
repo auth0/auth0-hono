@@ -336,7 +336,81 @@ describe('Error Mapping (mapServerError)', () => {
 
       const mapped = mapServerError(originalError);
 
-      expect(mapped.cause).toBe(originalError);
+      // cause is a redacted copy, not the original instance
+      expect(mapped.cause).toBeInstanceOf(Error);
+      expect((mapped.cause as Error).message).toBe('Original server error');
+      expect((mapped.cause as any).code).toBe('missing_session_error');
+    });
+
+    it('should redact tokens and secrets in the stored cause', () => {
+      const original = new Error('boom');
+      (original as any).code = 'token_by_refresh_token_error';
+      (original as any).access_token = 'at-secret-value';
+      (original as any).refresh_token = 'rt-secret-value';
+      (original as any).cause = { error: 'invalid_grant', client_secret: 'cs-secret-value' };
+
+      const mapped = mapServerError(original);
+      const cause = mapped.cause as any;
+
+      expect(cause.access_token).toBe('[REDACTED_TOKEN]');
+      expect(cause.refresh_token).toBe('[REDACTED_TOKEN]');
+      expect(cause.cause.client_secret).toBe('[REDACTED_SECRET]');
+      expect(cause.cause.error).toBe('invalid_grant');
+      // original is untouched, and classification still works off it
+      expect((original as any).access_token).toBe('at-secret-value');
+      expect(mapped.code).toBe('invalid_grant');
+    });
+
+    it('should keep a constructor-assigned error name on the redacted cause', () => {
+      class ServerJsLikeError extends Error {
+        code = 'missing_session_error';
+        constructor() {
+          super('no session');
+          this.name = 'MissingSessionError';
+        }
+      }
+      const mapped = mapServerError(new ServerJsLikeError());
+      expect((mapped.cause as Error).name).toBe('MissingSessionError');
+      expect((mapped.cause as any).code).toBe('missing_session_error');
+    });
+
+    it('should scrub JWTs and secret URL params from message and stack', () => {
+      const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl';
+      const original = new Error(`failed https://x/cb?code=abc123&state=xyz&ok=1 with ${jwt}`);
+      const mapped = mapServerError(original);
+      const cause = mapped.cause as Error;
+
+      for (const text of [cause.message, cause.stack ?? '', mapped.message]) {
+        expect(text).not.toContain(jwt);
+        expect(text).not.toContain('abc123');
+        expect(text).not.toContain('state=xyz');
+      }
+      expect(cause.message).toContain('ok=1');
+    });
+
+    it('should redact a nested native Error cause', () => {
+      const original = new Error('outer', {
+        cause: Object.assign(new Error('inner'), { id_token: 'secret.jwt.value' }),
+      });
+      (original as any).code = 'unknown_code';
+      const inner = (mapServerError(original).cause as any).cause as any;
+      expect(inner).toBeInstanceOf(Error);
+      expect(inner.message).toBe('inner');
+      expect(inner.id_token).toBe('[REDACTED_TOKEN]');
+    });
+
+    it('should still map the error when redaction throws (hostile getter)', () => {
+      const original = new Error('x');
+      (original as any).code = 'missing_session_error';
+      Object.defineProperty(original, 'trap', {
+        enumerable: true,
+        get() {
+          throw new Error('getter exploded');
+        },
+      });
+      const mapped = mapServerError(original);
+      expect(mapped.code).toBe('missing_session');
+      expect(mapped.cause).toBe('[REDACTED_UNSERIALIZABLE]');
     });
 
     it('should not expose cause in response body', async () => {

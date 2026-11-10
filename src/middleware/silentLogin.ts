@@ -86,6 +86,19 @@ export function deleteSilentLoginCookie(c: Context<OIDCEnv>): void {
   deleteCookie(c, COOKIE_NAME, getCookieOptions(c));
 }
 
+/**
+ * Attempt a silent login (`prompt=none`) for unauthenticated HTML navigations.
+ *
+ * Timing note: response time is not constant. Requests
+ * that already have a session, carry the skip cookie, or do not accept HTML
+ * continue straight to `next()`, while the first eligible navigation redirects
+ * to the authorization endpoint. A network observer can therefore tell these
+ * paths apart. The difference reveals only whether the browser has a session or
+ * the skip cookie, which the client already knows, and no credential or user
+ * data. It is not mitigated by design because padding responses would add
+ * latency for every request; do not rely on this middleware to hide session
+ * state from a network observer.
+ */
 export const attemptSilentLogin = () => {
   return createMiddleware<OIDCEnv>(async (c, next) => {
     const { client } = getClient(c);

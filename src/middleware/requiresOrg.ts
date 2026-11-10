@@ -13,6 +13,18 @@ import { Context, MiddlewareHandler, Next } from 'hono';
 type RequiresOrgOptions = undefined | { orgId: string } | ((c: Context) => boolean);
 
 /**
+ * Normalize an org identifier for comparison. `org_id` is a string claim, but
+ * config drift or custom stores can surface it as a number; compare by string
+ * value so the check is not type-sensitive. Anything that is not a non-empty
+ * string or finite number never matches.
+ */
+function normalizeOrgId(value: unknown): string | undefined {
+  if (typeof value === 'string') return value === '' ? undefined : value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+/**
  * Middleware: verifies user has organization context.
  *
  * Must be registered AFTER requiresAuth() middleware.
@@ -67,7 +79,9 @@ export function requiresOrg(options?: RequiresOrgOptions): MiddlewareHandler {
 
     // If options specify a specific org, check it matches
     if (options && typeof options === 'object' && 'orgId' in options) {
-      if (orgId !== options.orgId) {
+      const actual = normalizeOrgId(orgId);
+      const expected = normalizeOrgId(options.orgId);
+      if (actual === undefined || expected === undefined || actual !== expected) {
         throw new Auth0Error('User does not belong to the required organization', 403, 'organization_mismatch');
       }
     }

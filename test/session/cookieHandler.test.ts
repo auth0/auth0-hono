@@ -462,4 +462,31 @@ describe('HonoCookieHandler', () => {
       expect(getCookie).toHaveBeenCalledWith(ctx, 'sessionId');
     });
   });
+  describe('cookie options cache bound', () => {
+    const cacheOf = (h: HonoCookieHandler) => (h as any).cookieOptionsCache as Map<string, unknown>;
+
+    it('never grows past MAX_COOKIE_OPTIONS_CACHE_SIZE and evicts the oldest entries', () => {
+      const max = HonoCookieHandler.MAX_COOKIE_OPTIONS_CACHE_SIZE;
+      for (let i = 0; i < max + 25; i++) {
+        cookieHandler.setCookie(`c${i}`, 'v', { path: '/' } as any, mockContext);
+      }
+      const cache = cacheOf(cookieHandler);
+      expect(cache.size).toBe(max);
+      expect(cache.has('c0')).toBe(false);
+      expect(cache.has(`c${max + 24}`)).toBe(true);
+    });
+
+    it('keeps a recently re-set cookie when evicting', () => {
+      const max = HonoCookieHandler.MAX_COOKIE_OPTIONS_CACHE_SIZE;
+      cookieHandler.setCookie('keep', 'v', { path: '/' } as any, mockContext);
+      for (let i = 0; i < max - 1; i++) {
+        cookieHandler.setCookie(`c${i}`, 'v', { path: '/' } as any, mockContext);
+      }
+      cookieHandler.setCookie('keep', 'v2', { path: '/' } as any, mockContext); // refresh
+      cookieHandler.setCookie('overflow', 'v', { path: '/' } as any, mockContext);
+      const cache = cacheOf(cookieHandler);
+      expect(cache.has('keep')).toBe(true);
+      expect(cache.has('c0')).toBe(false);
+    });
+  });
 });

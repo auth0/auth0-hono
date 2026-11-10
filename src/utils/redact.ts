@@ -73,6 +73,8 @@ function redactInternal(value: unknown, depth: number, seen: WeakSet<object>): u
 
   const result: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    // An own `__proto__` key (e.g. from JSON.parse) would hit the prototype setter on assignment.
+    if (key === '__proto__') continue;
     const label = redactionLabelFor(key);
     if (label) {
       result[key] = label;
@@ -92,4 +94,57 @@ function redactInternal(value: unknown, depth: number, seen: WeakSet<object>): u
  */
 export function redactSecrets(data: unknown): unknown {
   return redactInternal(data, 0, new WeakSet<object>());
+}
+
+const JWT_PATTERN = /eyJ[\w-]+\.[\w-]+\.[\w-]*/g;
+const PARAM_PATTERN = /\b((?:[\w-]*token|[\w-]*secret|code|state|nonce|code_verifier|password)=)[^&\s"']+/gi;
+
+/**
+ * Scrub secret-shaped substrings from free text such as an error message or
+ * stack: JWT-looking strings and `key=value` pairs for token/secret/OIDC
+ * parameters (as found in URLs or form bodies). Best effort; it complements
+ * key-based redaction and does not guarantee a string is secret-free.
+ */
+export function scrubString(text: string): string {
+  return text.replace(JWT_PATTERN, '[REDACTED_TOKEN]').replace(PARAM_PATTERN, '$1[REDACTED]');
+}
+
+/**
+ * Produce a redacted copy of an error value for use as an `Error.cause`.
+ *
+ * `Error` instances keep `message`, `name` and `stack` as non-enumerable
+ * properties, so {@link redactSecrets} alone would drop them. This helper
+ * rebuilds an `Error` that keeps `name`, a string `code` (a machine-readable
+ * identifier, not an OIDC authorization code) and a {@link scrubString}-scrubbed
+ * `message`/`stack`. Every other own enumerable property goes through
+ * {@link redactSecrets}, and a `cause` (enumerable or not) is redacted
+ * recursively. Non-error values go straight to {@link redactSecrets}; string
+ * values are scrubbed. The input is never mutated.
+ */
+export function redactError(err: unknown, depth = 0): unknown {
+  if (typeof err === 'string') {
+    return scrubString(err);
+  }
+  if (!(err instanceof Error)) {
+    return redactSecrets(err);
+  }
+
+  const { code } = err as Error & { code?: unknown };
+  const rest: Record<string, unknown> = { ...err };
+  for (const key of ['code', 'name', 'message', 'stack', 'cause']) delete rest[key];
+  const copy = new Error();
+  Object.assign(copy, redactSecrets(rest) as Record<string, unknown>);
+  // Own `name` (server-js errors set it in their constructor) must not be replaced by a PII label.
+  copy.name = err.name;
+  copy.message = scrubString(err.message);
+  if (err.stack) copy.stack = scrubString(err.stack);
+  if (typeof code === 'string') {
+    (copy as Error & { code?: string }).code = code;
+  }
+  const originalCause = (err as Error & { cause?: unknown }).cause;
+  if (originalCause !== undefined) {
+    (copy as Error & { cause?: unknown }).cause =
+      depth >= MAX_DEPTH ? '[REDACTED_DEPTH_LIMIT]' : redactError(originalCause, depth + 1);
+  }
+  return copy;
 }

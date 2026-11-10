@@ -49,7 +49,10 @@ export class HonoCookieHandler implements CookieHandler<Context> {
   private static localStore: any = AsyncLocalStorageImpl ? new AsyncLocalStorageImpl() : null;
   // Singleton cache is safe — cookie names are static per lifecycle.
   // Multi-tenant deployments use ensureClient() which creates separate handler instances.
+  // Bounded (FIFO eviction) so a stream of distinct cookie names cannot grow it without limit.
   private cookieOptionsCache = new Map<string, CookieOptions>();
+  /** @internal */
+  static readonly MAX_COOKIE_OPTIONS_CACHE_SIZE = 100;
 
   static setContext<R>(context: Context, callback: () => R): R {
     if (!this.localStore) {
@@ -128,7 +131,13 @@ export class HonoCookieHandler implements CookieHandler<Context> {
     setCookie(ctx, name, value, cookieOptions);
     // Store options for deletion — Chrome scheme-bound cookies require matching attributes
     if (cookieOptions) {
+      // Re-insert so the entry moves to the newest position before evicting the oldest.
+      this.cookieOptionsCache.delete(name);
       this.cookieOptionsCache.set(name, cookieOptions);
+      if (this.cookieOptionsCache.size > HonoCookieHandler.MAX_COOKIE_OPTIONS_CACHE_SIZE) {
+        const oldest = this.cookieOptionsCache.keys().next().value;
+        if (oldest !== undefined) this.cookieOptionsCache.delete(oldest);
+      }
     }
     return value;
   }

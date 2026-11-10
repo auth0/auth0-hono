@@ -201,4 +201,28 @@ describe('requiresOrg middleware', () => {
       });
     });
   });
+  describe('orgId type normalization', () => {
+    const run = (userOrg: unknown, optOrg: unknown) => {
+      mockContext.var.auth0 = { user: { org_id: userOrg, sub: 'user123' } };
+      return requiresOrg({ orgId: optOrg as string })(mockContext, mockNext);
+    };
+
+    it('matches when the user org_id is a number and the option is the same value as a string', async () => {
+      expect(await run(123, '123')).toBe('next-called');
+    });
+
+    it('matches when the option is a number and the claim is a string', async () => {
+      expect(await run('123', 123)).toBe('next-called');
+    });
+
+    it('still rejects different values', async () => {
+      await expect(run('org_1', 'org_2')).rejects.toMatchObject({ code: 'organization_mismatch' });
+    });
+
+    it('rejects when the configured orgId is missing or not a string/number', async () => {
+      await expect(run('undefined', undefined)).rejects.toMatchObject({ code: 'organization_mismatch' });
+      await expect(run('[object Object]', {})).rejects.toMatchObject({ code: 'organization_mismatch' });
+      await expect(run('org_1', '')).rejects.toMatchObject({ code: 'organization_mismatch' });
+    });
+  });
 });

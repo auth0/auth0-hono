@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
-import { redactSecrets } from '../../src/utils/redact';
+import { redactError, redactSecrets } from '../../src/utils/redact';
 
 describe('redactSecrets', () => {
   describe('primitives', () => {
@@ -156,5 +156,42 @@ describe('redactSecrets', () => {
       expect(serialized).not.toContain('RAW_AUTH_CODE');
       expect(serialized).not.toContain('RAW_REFRESH');
     });
+  });
+});
+
+describe('redactSecrets prototype safety', () => {
+  it('ignores an own __proto__ key instead of changing the prototype', () => {
+    const input = JSON.parse('{"__proto__": {"polluted": true}, "a": 1}');
+    const out = redactSecrets(input) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(out.a).toBe(1);
+    expect((out as any).polluted).toBeUndefined();
+  });
+});
+
+describe('redactError', () => {
+  it('preserves message, name, stack and string code while redacting other fields', () => {
+    const err = new TypeError('bad thing') as TypeError & Record<string, unknown>;
+    err.code = 'some_code';
+    err.id_token = 'jwt.value';
+    err.detail = { password: 'hunter2', note: 'ok' };
+
+    const out = redactError(err) as Error & Record<string, any>;
+
+    expect(out).toBeInstanceOf(Error);
+    expect(out).not.toBe(err);
+    expect(out.name).toBe('TypeError');
+    expect(out.message).toBe('bad thing');
+    expect(out.stack).toBe(err.stack);
+    expect(out.code).toBe('some_code');
+    expect(out.id_token).toBe('[REDACTED_TOKEN]');
+    expect(out.detail).toEqual({ password: '[REDACTED_SECRET]', note: 'ok' });
+    expect(err.id_token).toBe('jwt.value');
+  });
+
+  it('delegates non-Error values to redactSecrets', () => {
+    expect(redactError({ access_token: 'x', a: 1 })).toEqual({ access_token: '[REDACTED_TOKEN]', a: 1 });
+    expect(redactError('plain')).toBe('plain');
+    expect(redactError(undefined)).toBeUndefined();
   });
 });

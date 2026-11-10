@@ -1,15 +1,14 @@
 # Change Log
 
-## Unreleased
+## [v2.0.0-beta.1](https://github.com/auth0/auth0-hono/tree/v2.0.0-beta.1) (2026-11-10)
+[Full Changelog](https://github.com/auth0/auth0-hono/compare/v2.0.0-beta.0...v2.0.0-beta.1)
 
 **Added**
-- feat: `KVSessionStore` — a Cloudflare Workers KV-backed, BCLO-ready stateful session store (`sid`/`sub` indexes, TTL-managed).
-- feat: `getAccessToken(c, options?)` now accepts `{ audience?, scope?, refresh? }`. Scope partitions the per-request cache; `refresh: true` forces a refresh; a mismatched `audience` throws `unsupported_audience_override` (existing no-argument calls are unchanged).
-- feat: `auth0ErrorHandler` — a ready-made `app.onError` handler that maps SDK errors to responses (HTML redirect vs JSON) and re-throws non-Auth0 errors.
-- feat: `requiresScopes(...)` and `requiresPermissions(...)` authorization middleware.
-- feat: `AUTH0_DEBUG` environment variable enables a built-in, secret-redacting debug logger (explicit `debug` config still takes precedence).
+- feat: non-breaking DX improvements for GA [\#48](https://github.com/auth0/auth0-hono/pull/48) ([tusharpandey13](https://github.com/tusharpandey13))
+- feat: Add demo application [\#22](https://github.com/auth0/auth0-hono/pull/22) ([tusharpandey13](https://github.com/tusharpandey13))
 
-All additions are non-breaking (additive exports, optional parameters, and opt-in environment defaults).
+**Fixed**
+- fix: harden error cause redaction, cookie cache bound and org_id comparison [\#75](https://github.com/auth0/auth0-hono/pull/75) ([tusharpandey13](https://github.com/tusharpandey13))
 
 ## [v2.0.0-beta.0](https://github.com/auth0/auth0-hono/tree/v2.0.0-beta.0) (2026-05-29)
 

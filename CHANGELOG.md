@@ -9,6 +9,7 @@
 
 **Fixed**
 - fix: harden error cause redaction, cookie cache bound and org_id comparison [\#75](https://github.com/auth0/auth0-hono/pull/75) ([tusharpandey13](https://github.com/tusharpandey13))
+  - Note: `error.cause` on errors created by `mapServerError` is now a redacted copy, not the original instance. Identity and `instanceof` checks against `cause` no longer hold.
 
 ## [v2.0.0-beta.0](https://github.com/auth0/auth0-hono/tree/v2.0.0-beta.0) (2026-05-29)
 

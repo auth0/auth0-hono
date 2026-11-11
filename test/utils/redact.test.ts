@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
-import { redactSecrets } from '../../src/utils/redact';
+import { redactError, redactSecrets, scrubString } from '../../src/utils/redact';
 
 describe('redactSecrets', () => {
   describe('primitives', () => {
@@ -156,5 +156,112 @@ describe('redactSecrets', () => {
       expect(serialized).not.toContain('RAW_AUTH_CODE');
       expect(serialized).not.toContain('RAW_REFRESH');
     });
+  });
+});
+
+describe('redactSecrets prototype safety', () => {
+  it('ignores an own __proto__ key instead of changing the prototype', () => {
+    const input = JSON.parse('{"__proto__": {"polluted": true}, "a": 1}');
+    const out = redactSecrets(input) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(out.a).toBe(1);
+    expect((out as any).polluted).toBeUndefined();
+  });
+});
+
+describe('redactError', () => {
+  it('preserves message, name, stack and string code while redacting other fields', () => {
+    const err = new TypeError('bad thing') as TypeError & Record<string, unknown>;
+    err.code = 'some_code';
+    err.id_token = 'jwt.value';
+    err.detail = { password: 'hunter2', note: 'ok' };
+
+    const out = redactError(err) as Error & Record<string, any>;
+
+    expect(out).toBeInstanceOf(Error);
+    expect(out).not.toBe(err);
+    expect(out.name).toBe('TypeError');
+    expect(out.message).toBe('bad thing');
+    expect(out.stack).toBe(err.stack);
+    expect(out.code).toBe('some_code');
+    expect(out.id_token).toBe('[REDACTED_TOKEN]');
+    expect(out.detail).toEqual({ password: '[REDACTED_SECRET]', note: 'ok' });
+    expect(err.id_token).toBe('jwt.value');
+  });
+
+  it('delegates non-Error values to redactSecrets', () => {
+    expect(redactError({ access_token: 'x', a: 1 })).toEqual({ access_token: '[REDACTED_TOKEN]', a: 1 });
+    expect(redactError('plain')).toBe('plain');
+    expect(redactError(undefined)).toBeUndefined();
+  });
+});
+
+describe('scrubString', () => {
+  const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl';
+
+  it('scrubs compact JWS and JWE values, including an empty encrypted-key segment', () => {
+    const jwe = 'eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..aXY.Y3Q.dGFn';
+    expect(scrubString(`a ${jwt} b ${jwe} c`)).toBe('a [REDACTED_TOKEN] b [REDACTED_TOKEN] c');
+  });
+
+  it('scrubs name=value pairs', () => {
+    expect(scrubString('https://x/cb?code=abc&state=xyz&ok=1&refresh_token=opaque')).toBe(
+      'https://x/cb?code=[REDACTED]&state=[REDACTED]&ok=1&refresh_token=[REDACTED]'
+    );
+  });
+
+  it('scrubs JSON and colon-separated values for token and secret names', () => {
+    expect(scrubString('{"refresh_token":"abc.def","other":"keep"}')).toBe(
+      '{"refresh_token":"[REDACTED]","other":"keep"}'
+    );
+    expect(scrubString('client_secret: xyz123 next')).toBe('client_secret: [REDACTED] next');
+    expect(scrubString("password: 'hunter2'")).toBe("password: '[REDACTED]'");
+  });
+
+  it('scrubs opaque bearer credentials', () => {
+    expect(scrubString('Authorization: Bearer v1.opaque-Token_123=')).toBe('Authorization: Bearer [REDACTED]');
+  });
+
+  it('leaves ordinary text and non-strings alone', () => {
+    expect(scrubString('Error code: 401 from upstream')).toBe('Error code: 401 from upstream');
+    expect(scrubString(42)).toBe(42);
+    expect(scrubString(undefined)).toBeUndefined();
+  });
+
+  it('runs in linear time on long hyphenated input', () => {
+    const input = 'a-'.repeat(40_000);
+    const start = performance.now();
+    scrubString(input);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+});
+
+describe('redactError string leaves and non-Error values', () => {
+  it('scrubs strings inside a plain-object cause', () => {
+    const out = redactError({
+      error: 'invalid_grant',
+      error_description: 'bad request refresh_token=opaque123 for client',
+      nested: ['Bearer abc.def'],
+    }) as any;
+    expect(out.error).toBe('invalid_grant');
+    expect(out.error_description).toBe('bad request refresh_token=[REDACTED] for client');
+    expect(out.nested[0]).toBe('Bearer [REDACTED]');
+  });
+
+  it('redacts code on plain objects (may be an authorization code) but keeps it on Errors', () => {
+    expect((redactError({ code: 'abc' }) as any).code).toBe('[REDACTED_OIDC]');
+    expect((redactError(Object.assign(new Error('x'), { code: 'some_code' })) as any).code).toBe('some_code');
+  });
+
+  it('reports a cyclic cause as circular', () => {
+    const err = new Error('loop') as Error & { cause?: unknown };
+    err.cause = err;
+    expect((redactError(err) as any).cause).toBe('[REDACTED_CIRCULAR]');
+  });
+
+  it('does not throw on a non-string message', () => {
+    const err = new Error('x') as any;
+    err.message = 42;
+    expect(() => redactError(err)).not.toThrow();
   });
 });

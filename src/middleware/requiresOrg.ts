@@ -67,6 +67,8 @@ export function requiresOrg(options?: RequiresOrgOptions): MiddlewareHandler {
 
     // If options specify a specific org, check it matches
     if (options && typeof options === 'object' && 'orgId' in options) {
+      // Strict comparison on purpose: `org_id` is a string claim from the signed ID token and the
+      // option is typed `string`, so a non-string value fails closed instead of being coerced.
       if (orgId !== options.orgId) {
         throw new Auth0Error('User does not belong to the required organization', 403, 'organization_mismatch');
       }

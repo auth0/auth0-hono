@@ -201,4 +201,25 @@ describe('requiresOrg middleware', () => {
       });
     });
   });
+  describe('strict orgId comparison', () => {
+    const run = (userOrg: unknown, optOrg: unknown) => {
+      mockContext.var.auth0 = { user: { org_id: userOrg, sub: 'user123' } };
+      return requiresOrg({ orgId: optOrg as string })(mockContext, mockNext);
+    };
+
+    it('accepts an identical string', async () => {
+      expect(await run('org_1', 'org_1')).toBe('next-called');
+    });
+
+    it('fails closed when the claim and option differ only by type', async () => {
+      await expect(run(123, '123')).rejects.toMatchObject({ code: 'organization_mismatch' });
+      await expect(run('123', 123)).rejects.toMatchObject({ code: 'organization_mismatch' });
+    });
+
+    it('rejects different values and missing or non-scalar options', async () => {
+      await expect(run('org_1', 'org_2')).rejects.toMatchObject({ code: 'organization_mismatch' });
+      await expect(run('undefined', undefined)).rejects.toMatchObject({ code: 'organization_mismatch' });
+      await expect(run('[object Object]', {})).rejects.toMatchObject({ code: 'organization_mismatch' });
+    });
+  });
 });

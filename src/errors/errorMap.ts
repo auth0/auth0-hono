@@ -51,7 +51,12 @@ export function mapServerError(err: unknown): Auth0Error {
   try {
     cause = redactError(err);
   } catch {
-    cause = '[REDACTED_UNSERIALIZABLE]';
+    // Keep the safe identifying fields so the cause is still useful for debugging.
+    const fallback = new Error('[REDACTED_UNSERIALIZABLE]');
+    const { name, code } = err as { name?: unknown; code?: unknown };
+    if (typeof name === 'string') fallback.name = name;
+    if (typeof code === 'string') (fallback as Error & { code?: string }).code = code;
+    cause = fallback;
   }
 
   // Optional chaining makes cast safe: missing `code` or `cause` fields return undefined

@@ -465,28 +465,41 @@ describe('HonoCookieHandler', () => {
   describe('cookie options cache bound', () => {
     const cacheOf = (h: HonoCookieHandler) => (h as any).cookieOptionsCache as Map<string, unknown>;
 
-    it('never grows past MAX_COOKIE_OPTIONS_CACHE_SIZE and evicts the oldest entries', () => {
+    it('never grows past MAX_COOKIE_OPTIONS_CACHE_SIZE', () => {
       const max = HonoCookieHandler.MAX_COOKIE_OPTIONS_CACHE_SIZE;
       for (let i = 0; i < max + 25; i++) {
         cookieHandler.setCookie(`c${i}`, 'v', { path: '/' } as any, mockContext);
       }
-      const cache = cacheOf(cookieHandler);
-      expect(cache.size).toBe(max);
-      expect(cache.has('c0')).toBe(false);
-      expect(cache.has(`c${max + 24}`)).toBe(true);
+      expect(cacheOf(cookieHandler).size).toBe(max);
     });
 
-    it('keeps a recently re-set cookie when evicting', () => {
+    it('keeps existing entries once full instead of evicting them', () => {
       const max = HonoCookieHandler.MAX_COOKIE_OPTIONS_CACHE_SIZE;
-      cookieHandler.setCookie('keep', 'v', { path: '/' } as any, mockContext);
-      for (let i = 0; i < max - 1; i++) {
-        cookieHandler.setCookie(`c${i}`, 'v', { path: '/' } as any, mockContext);
+      for (let i = 0; i < max; i++) {
+        cookieHandler.setCookie(`c${i}`, 'v', { path: '/', domain: 'example.com', secure: true } as any, mockContext);
       }
-      cookieHandler.setCookie('keep', 'v2', { path: '/' } as any, mockContext); // refresh
       cookieHandler.setCookie('overflow', 'v', { path: '/' } as any, mockContext);
       const cache = cacheOf(cookieHandler);
-      expect(cache.has('keep')).toBe(true);
-      expect(cache.has('c0')).toBe(false);
+      expect(cache.has('overflow')).toBe(false);
+      expect(cache.has('c0')).toBe(true);
+
+      // deleting an early cookie still uses its original attributes
+      cookieHandler.deleteCookie('c0', mockContext);
+      expect(setCookie).toHaveBeenLastCalledWith(
+        mockContext,
+        'c0',
+        '',
+        expect.objectContaining({ maxAge: 0, domain: 'example.com', secure: true })
+      );
+    });
+
+    it('still updates options for a name that is already cached when full', () => {
+      const max = HonoCookieHandler.MAX_COOKIE_OPTIONS_CACHE_SIZE;
+      for (let i = 0; i < max; i++) {
+        cookieHandler.setCookie(`c${i}`, 'v', { path: '/' } as any, mockContext);
+      }
+      cookieHandler.setCookie('c0', 'v', { path: '/', domain: 'new.example.com' } as any, mockContext);
+      expect((cacheOf(cookieHandler).get('c0') as any).domain).toBe('new.example.com');
     });
   });
 });

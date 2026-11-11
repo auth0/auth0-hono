@@ -40,7 +40,9 @@ export class Auth0Error extends HTTPException {
    * @param status - HTTP status code (401, 403, 400, 500, etc.)
    * @param code - OAuth2 error code (e.g., 'access_denied', 'invalid_grant')
    * @param options - Additional options:
-   *   - `cause`: Original error for logging/debugging (not exposed in HTTP response)
+   *   - `cause`: Error that triggered this one, for logging/debugging (not exposed in HTTP response).
+   *     Errors created by `mapServerError` store a redacted copy rather than the original instance, so
+   *     do not rely on identity or `instanceof` checks against it.
    *   - `description`: Override default description (defaults to message parameter)
    */
   constructor(

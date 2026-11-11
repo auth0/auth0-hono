@@ -410,7 +410,30 @@ describe('Error Mapping (mapServerError)', () => {
       });
       const mapped = mapServerError(original);
       expect(mapped.code).toBe('missing_session');
-      expect(mapped.cause).toBe('[REDACTED_UNSERIALIZABLE]');
+      // the safe identifying fields survive the fallback
+      expect((mapped.cause as Error).message).toBe('[REDACTED_UNSERIALIZABLE]');
+      expect((mapped.cause as any).code).toBe('missing_session_error');
+    });
+
+    it('should keep name, code and a placeholder message when message is not a string', () => {
+      const original = new Error('x') as any;
+      original.code = 'missing_session_error';
+      original.message = 42;
+      original.stack = { not: 'a string' };
+      const mapped = mapServerError(original);
+      expect(mapped.code).toBe('missing_session');
+      const cause = mapped.cause as any;
+      expect(cause).toBeInstanceOf(Error);
+      expect(cause.code).toBe('missing_session_error');
+      expect(cause.name).toBe('Error');
+    });
+
+    it('should stop on a cyclic cause chain', () => {
+      const original = new Error('loop') as any;
+      original.code = 'missing_session_error';
+      original.cause = original;
+      const cause = mapServerError(original).cause as any;
+      expect(cause.cause).toBe('[REDACTED_CIRCULAR]');
     });
 
     it('should not expose cause in response body', async () => {

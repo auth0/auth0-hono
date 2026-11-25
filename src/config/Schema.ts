@@ -3,6 +3,12 @@ import { Configuration } from './Configuration.js';
 
 const isHttps = /^https:/i;
 
+// zod 4's z.number() rejects Infinity, which zod 3 accepted. Options that accepted it are a union of the number
+// schema and a literal so existing configs keep working. The union-level error keeps wrong-type input readable
+// (it would otherwise be a generic "Invalid input"); range errors such as .min() still come from the number branch.
+const numberOrInfinity = (num = z.number(), inf: number[] = [Infinity, -Infinity]) =>
+  z.union([num, z.literal(inf)], { error: 'Expected a number' });
+
 // Helper method to create response type/mode schema with proper dependencies
 const createAuthParamsSchema = () => {
   return z.looseObject({
@@ -23,12 +29,10 @@ export const ConfigurationSchema = z
       store: z.any().optional(),
       secret: z.union([z.string().min(32), z.array(z.string().min(32)).min(1)]),
       rolling: z.boolean().optional().default(true),
-      absoluteDuration: z
-        .union([z.number(), z.literal([Infinity, -Infinity])])
+      absoluteDuration: numberOrInfinity()
         .optional()
         .default(60 * 60 * 24 * 3),
-      inactivityDuration: z
-        .union([z.number(), z.literal([Infinity, -Infinity])])
+      inactivityDuration: numberOrInfinity()
         .optional()
         .default(60 * 60 * 24),
       cookie: z
@@ -50,10 +54,7 @@ export const ConfigurationSchema = z
     baseURL: z.url(),
     clientID: z.string(),
     clientSecret: z.string().optional(),
-    clockTolerance: z
-      .union([z.number(), z.literal([Infinity, -Infinity])])
-      .optional()
-      .default(60),
+    clockTolerance: numberOrInfinity().optional().default(60),
     enableTelemetry: z.boolean().optional().default(true),
     errorOnRequiredAuth: z.boolean().optional().default(false),
     attemptSilentLogin: z.boolean().optional().default(false),
@@ -101,14 +102,10 @@ export const ConfigurationSchema = z
     clientAssertionSigningAlg: z
       .enum(['RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512', 'ES256', 'ES256K', 'ES384', 'ES512', 'EdDSA'])
       .optional(),
-    discoveryCacheMaxAge: z
-      .union([z.number().min(0), z.literal(Infinity)])
+    discoveryCacheMaxAge: numberOrInfinity(z.number().min(0), [Infinity])
       .optional()
       .default(10 * 60 * 1000),
-    httpTimeout: z
-      .union([z.number().min(500), z.literal(Infinity)])
-      .optional()
-      .default(5000),
+    httpTimeout: numberOrInfinity(z.number().min(500), [Infinity]).optional().default(5000),
     httpUserAgent: z.string().optional().default('hono-openid-connect'),
 
     fetch: z
@@ -186,7 +183,6 @@ export const ConfigurationSchema = z
             code: 'invalid_value',
             values: ['query', 'form_post'],
             input: responseMode,
-            received: responseMode,
             message: "For response_type 'code', response_mode must be 'query' or 'form_post'",
             path: ['authorizationParams', 'response_mode'],
           });
@@ -196,7 +192,6 @@ export const ConfigurationSchema = z
           code: 'invalid_value',
           values: ['form_post'],
           input: responseMode,
-          received: responseMode,
           message: "For this response_type, response_mode must be 'form_post'",
           path: ['authorizationParams', 'response_mode'],
         });

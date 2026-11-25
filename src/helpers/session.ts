@@ -6,18 +6,14 @@ import { Auth0Session, Auth0User } from '@/types/auth0.js';
 import { MissingSessionError } from '@/errors/index.js';
 import { Auth0Error } from '@/errors/Auth0Error.js';
 
-const StateDataSchema = z
-  .object({
-    user: z.record(z.any()),
-    idToken: z.string().optional(),
-    tokenSets: z.array(z.any()),
-    internal: z
-      .object({
-        createdAt: z.number(),
-      })
-      .passthrough(),
-  })
-  .passthrough();
+const StateDataSchema = z.looseObject({
+  user: z.record(z.string(), z.any()),
+  idToken: z.string().optional(),
+  tokenSets: z.array(z.any()),
+  internal: z.looseObject({
+    createdAt: z.number(),
+  }),
+});
 
 /**
  * Validate StateData contains required fields.
@@ -30,7 +26,7 @@ const StateDataSchema = z
 function validateStateDataShape(data: unknown): asserts data is StateData {
   const result = StateDataSchema.safeParse(data);
   if (!result.success) {
-    const issue = result.error.errors[0];
+    const issue = result.error.issues[0];
     const path = issue.path.join('.');
     const message = path
       ? `Invalid session state: ${path} — ${issue.message}`

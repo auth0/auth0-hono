@@ -1,6 +1,6 @@
 # Testing
 
-- **Framework:** Vitest 3, `environment: 'node'` (`vitest.config.ts`). The `@` alias resolves to `src/`.
+- **Framework:** Vitest 5, `environment: 'node'` (`vitest.config.ts`). The `@` alias resolves to `src/`.
 - **Locations:** `test/**/*.test.ts` and `test/**/*.spec.ts`.
 - **Coverage:** `@vitest/coverage-v8`; `npm run test:coverage`. No coverage threshold is configured.
 - **Credentials:** the default `npm test` suite needs none and makes no network calls. No live-tenant test tier was detected.

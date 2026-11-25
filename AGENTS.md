@@ -94,7 +94,7 @@ See [references/commands.md](references/commands.md) for coverage, single-file r
 
 ## Testing
 
-Vitest 3 on Node; tests live in `test/` (`*.test.ts`, `*.spec.ts`) and the default `npm test` suite runs with no credentials or network. See [references/testing.md](references/testing.md) for fixtures, mocking patterns and the flow/integration layout. Read when writing or fixing tests.
+Vitest 5 on Node; tests live in `test/` (`*.test.ts`, `*.spec.ts`) and the default `npm test` suite runs with no credentials or network. See [references/testing.md](references/testing.md) for fixtures, mocking patterns and the flow/integration layout. Read when writing or fixing tests.
 
 ## Code Style
 

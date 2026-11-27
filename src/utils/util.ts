@@ -29,6 +29,28 @@ export function createRouteUrl(url: string, base: string) {
 }
 
 /**
+ * Builds a callback URL using the baseURL's origin (protocol + host) combined with
+ * the request's pathname and search. This ensures reverse proxies that strip TLS
+ * don't cause redirect_uri mismatches.
+ *
+ * When behind a reverse proxy (e.g., AWS ALB), the incoming request URL may have
+ * the wrong protocol (http instead of https) or host. This helper extracts the
+ * pathname+search from the request and combines them with the configured baseURL's
+ * origin, ensuring the callback URL matches the redirect_uri sent to Auth0.
+ *
+ * @param requestUrl The request URL as seen by Hono (may have wrong protocol/host from proxy)
+ * @param baseURL The configured base URL (has correct protocol/host/port)
+ * @returns A URL whose origin comes from baseURL and pathname+search from the request
+ */
+export function createCallbackUrl(requestUrl: string, baseURL: string): URL {
+  const baseUrlObj = new URL(baseURL);
+  const requestUrlObj = new URL(requestUrl);
+
+  // Use baseURL's origin (protocol + host + port) with request's pathname + search
+  return new URL(`${baseUrlObj.origin}${requestUrlObj.pathname}${requestUrlObj.search}`);
+}
+
+/**
  * Function to ensure a redirect URL is safe to use, as in, it has the same origin as the safeBaseUrl.
  * @param dangerousRedirect The redirect URL to check.
  * @param safeBaseUrl The base URL to check against.
